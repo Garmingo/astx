@@ -24,6 +24,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install
       - name: Publish packages to npm
-        run: pnpm turbo exec publish
+        run: pnpm turbo run publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
