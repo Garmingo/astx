@@ -16,13 +16,8 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import {
-  compile,
-  generateJSCode,
-  loadFromFile,
-  run,
-  saveToFile,
-} from "@astx/lib";
+import { compile, saveToFile } from "@astx/compiler";
+import { generateJSCode, loadFromFile, run } from "@astx/runtime";
 import { program } from "commander";
 import { readFileSync, writeFileSync } from "fs";
 import path from "path";
@@ -100,9 +95,11 @@ program
     "Show the version of the runtime and the astx/lib that includes the compiler"
   )
   .action(() => {
-    console.log(`Runtime: ${version}`);
+    console.log(`CLI: ${version}`);
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    console.log(`Compiler: ${require("@astx/lib/package.json").version}`);
+    console.log(`Compiler: ${require("@astx/compiler/package.json").version}`);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    console.log(`Runtime: ${require("@astx/runtime/package.json").version}`);
   });
 
 program.showHelpAfterError();

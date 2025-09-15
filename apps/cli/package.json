@@ -27,7 +27,8 @@
     "@types/node": "^24.4.0"
   },
   "dependencies": {
-    "@astx/lib": "^1.11.3",
+    "@astx/compiler": "workspace:*",
+    "@astx/runtime": "workspace:*",
     "commander": "^14.0.1"
   },
   "pkg": {
