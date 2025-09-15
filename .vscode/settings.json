@@ -3,5 +3,8 @@
     {
       "mode": "auto"
     }
-  ]
+  ],
+  "copyrighter.license": "GPL3",
+  "copyrighter.newFilesOnly": true,
+  "copyrighter.author": "Garmingo and the ASTX Contributors"
 }

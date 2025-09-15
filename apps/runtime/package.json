@@ -1,0 +1,49 @@
+{
+  "name": "@astx/cli",
+  "version": "1.0.0",
+  "description": "Compile and run ASTX files from your command line",
+  "main": "src/index.ts",
+  "bin": {
+    "astx": "dist/index.js"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "build": "rimraf ./dist && tsc",
+    "prepack": "npm run build",
+    "prestart": "npm run build",
+    "start": "node dist/index.js",
+    "package": "npm run build && pkg ."
+  },
+  "author": "Alexander Neitzel",
+  "license": "GPL-3.0-only",
+  "devDependencies": {
+    "pkg": "^5.8.1",
+    "rimraf": "^5.0.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "eslint": "^9.34.0",
+    "@types/node": "^24.4.0"
+  },
+  "dependencies": {
+    "@astx/lib": "^1.11.3",
+    "commander": "^13.1.0"
+  },
+  "pkg": {
+    "targets": [
+      "node18-linux-x64",
+      "node18-macos-x64",
+      "node18-win-x64"
+    ],
+    "outputPath": "bundle"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Garmingo/astx.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
