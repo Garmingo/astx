@@ -20,7 +20,7 @@ This project is inspired by [WebAssembly](https://webassembly.org/), but it is n
 
 ## Installation
 ```bash
-npm install @astx/lib
+npm install @astx/compiler
 ```
 
 ## Usage
@@ -39,17 +39,9 @@ saveToFile(program, 'program.astx');
 ```
 
 ### Running
-```javascript
-import { loadFromFile, run } from '@astx/lib';
-
-const program = loadFromFile('program.astx');
-const result = run(program); 
-// or
-run(program)
-```
+Refer to `@astx/runtime` for more details.
 
 ## Known limitations
-- **working directory**: The working directory of the ASTX runtime is the working directory of the execution environment, meaning that **require** and **import** statements will be relative to the working directory of the execution environment and **NOT** the working directory of the .astx file.
 - **Transformer side-effects**: Since we are now basically are doing AOT (Ahead Of Time) compilation, we can run transformers to improve the code. These transformers can have side-effects (if they are faulty) that can change the behavior of the program. This is not a limitation per se, but it is something to be aware of.
 
 ## License

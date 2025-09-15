@@ -1,6 +1,10 @@
-# Turborepo starter
+# ASTX Monorepo
+This is the monorepo for the ASTX project, which includes the compiler, runtime, and shared packages.
+ASTX is an AST-based binary format for JavaScript files. It is designed to be a fast and efficient way to distribute JavaScript code in a smaller size compared to traditional JavaScript files.
+It also allows for compiler level optimizations and tree-shaking.
 
-This Turborepo starter is maintained by the Turborepo core team.
+## Readme in progress
+This readme is currently a placeholder and will be updated soon with more information about the project, how to use it, and how to contribute.
 
 ## Using this example
 

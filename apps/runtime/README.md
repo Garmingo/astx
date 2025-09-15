@@ -3,7 +3,7 @@ Check out ASTX [here](https://github.com/Garmingo/astx) for more information.
 
 ## Installation
 ```bash
-npm install -g @astx/runtime
+npm install -g @astx/cli
 ```
 
 ## Usage
