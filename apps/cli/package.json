@@ -18,17 +18,17 @@
   "license": "GPL-3.0-only",
   "devDependencies": {
     "pkg": "^5.8.1",
-    "rimraf": "^5.0.5",
+    "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "eslint": "^9.34.0",
+    "eslint": "^9.35.0",
     "@types/node": "^24.4.0"
   },
   "dependencies": {
     "@astx/lib": "^1.11.3",
-    "commander": "^13.1.0"
+    "commander": "^14.0.1"
   },
   "pkg": {
     "targets": [
