@@ -1,6 +1,6 @@
 {
   "name": "@astx/compiler",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Compiler library for a tiny JS AST based binary file format",
   "files": [
     "dist"
