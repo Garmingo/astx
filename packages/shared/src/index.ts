@@ -72,6 +72,7 @@ export const MINIMAL_AST_KEYS: Record<string, string[]> = {
   ConditionalExpression: ["test", "consequent", "alternate"],
   ObjectExpression: ["properties"],
   OptionalMemberExpression: ["object", "property", "computed", "optional"],
+  OptionalCallExpression: ["callee", "arguments", "optional"],
   ArrayExpression: ["elements"],
   ClassExpression: ["id", "superClass", "body"],
   ThisExpression: [],
