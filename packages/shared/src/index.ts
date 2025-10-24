@@ -108,6 +108,7 @@ export const MINIMAL_AST_KEYS: Record<string, string[]> = {
   NullLiteral: [],
   RegExpLiteral: ["pattern", "flags"],
   TemplateLiteral: ["quasis", "expressions"],
+  BigIntLiteral: ["value"],
 
   // Elements
   RestElement: ["argument"],
