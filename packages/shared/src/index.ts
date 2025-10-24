@@ -51,6 +51,7 @@ export const MINIMAL_AST_KEYS: Record<string, string[]> = {
   FunctionDeclaration: ["id", "params", "body", "generator", "async"],
   ExportNamedDeclaration: ["declaration", "specifiers", "source"],
   ExportDefaultDeclaration: ["declaration"],
+  ClassDeclaration: ["id", "superClass", "body"],
 
   // Expressions
   BinaryExpression: ["left", "operator", "right"],
