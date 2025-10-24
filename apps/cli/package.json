@@ -1,6 +1,6 @@
 {
   "name": "@astx/cli",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Compile and run ASTX files from your command line",
   "main": "src/index.ts",
   "bin": {
