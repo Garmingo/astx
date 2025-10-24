@@ -121,6 +121,7 @@ export const MINIMAL_AST_KEYS: Record<string, string[]> = {
   // Other
   ObjectProperty: ["key", "value"],
   ObjectMethod: ["key", "params", "body"],
+  ClassProperty: ["key", "value"],
   ClassBody: ["body"],
   ClassMethod: ["key", "params", "body"],
   SwitchCase: ["test", "consequent"],
