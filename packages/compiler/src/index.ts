@@ -199,6 +199,9 @@ export function compile(jsCode: string): CompiledProgram {
     });
   }
 
+  // Unsupported node types will be logged and cause exit
+  const unsupportedNodes: string[] = [];
+
   function encode(node: any): number | undefined {
     if (!node || typeof node !== "object") return;
 
@@ -206,7 +209,9 @@ export function compile(jsCode: string): CompiledProgram {
     if (node.type && !MINIMAL_AST_KEYS[node.type]) {
       console.error("Unsupported node type:", node.type);
 
-      process.exit(1);
+      if (!unsupportedNodes.includes(node.type)) {
+        unsupportedNodes.push(node.type);
+      }
     }
 
     const type = node.type || "null";
@@ -267,6 +272,14 @@ export function compile(jsCode: string): CompiledProgram {
   }
 
   encode(ast.program); // Skip the File wrapper
+
+  if (unsupportedNodes.length > 0) {
+    throw new Error(
+      `Compilation failed due to unsupported node types: ${unsupportedNodes.join(
+        ", "
+      )}`
+    );
+  }
 
   return {
     expressionDict,
