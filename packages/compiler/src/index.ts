@@ -202,7 +202,10 @@ export function compile(jsCode: string): CompiledProgram {
   // Unsupported node types will be logged and cause exit
   const unsupportedNodes: string[] = [];
 
-  function encode(node: any): number | undefined {
+  function encode(
+    node: any,
+    options?: { preserveIdentifierName?: boolean }
+  ): number | undefined {
     if (!node || typeof node !== "object") return;
 
     // Check if type is currently unsupported
@@ -242,7 +245,26 @@ export function compile(jsCode: string): CompiledProgram {
     for (const key of keys) {
       const value = node[key];
 
-      if (key === "name" && type === "Identifier" && declaredVars.has(value)) {
+      // Preserve identifier names in non-renamable positions
+      const preserveIdentifierName =
+        options?.preserveIdentifierName === true ||
+        // Object properties/methods keys should never be mangled
+        ((type === "ObjectProperty" || type === "ObjectMethod") &&
+          key === "key") ||
+        // Class members keys should never be mangled
+        ((type === "ClassProperty" || type === "ClassMethod") &&
+          key === "key") ||
+        // Member expression non-computed properties should never be mangled
+        ((type === "MemberExpression" || type === "OptionalMemberExpression") &&
+          key === "property" &&
+          node.computed === false);
+
+      if (
+        key === "name" &&
+        type === "Identifier" &&
+        declaredVars.has(value) &&
+        !preserveIdentifierName
+      ) {
         if (!seenVars.has(value)) {
           seenVars.set(value, varCounter++);
         }
@@ -260,7 +282,22 @@ export function compile(jsCode: string): CompiledProgram {
       } else if (Array.isArray(value)) {
         values.push(value.map((v) => (typeof v === "object" ? encode(v) : v)));
       } else if (typeof value === "object" && value !== null) {
-        values.push(encode(value));
+        // When visiting child nodes, propagate preservation intent for special positions
+        const childOptions =
+          // Pass preserve flag for ObjectProperty/ObjectMethod/Class* keys and non-computed member properties
+          ((type === "ObjectProperty" ||
+            type === "ObjectMethod" ||
+            type === "ClassProperty" ||
+            type === "ClassMethod") &&
+            key === "key") ||
+          ((type === "MemberExpression" ||
+            type === "OptionalMemberExpression") &&
+            key === "property" &&
+            node.computed === false)
+            ? { preserveIdentifierName: true }
+            : undefined;
+
+        values.push(encode(value, childOptions));
       } else {
         values.push(value);
       }
