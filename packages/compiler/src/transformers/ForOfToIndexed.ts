@@ -38,7 +38,7 @@ export const ForOfToIndexedTransformer: NodeTransformer<t.ForOfStatement> = {
     const indexId = context.helpers.generateUid("i");
 
     const itemBinding = t.isVariableDeclaration(node.left)
-      ? (node.left.declarations[0].id as t.Identifier)
+      ? (node.left.declarations[0]?.id as t.Identifier)
       : (node.left as t.Identifier);
 
     const arrayAccess = t.memberExpression(arrayId, indexId, true);
