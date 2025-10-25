@@ -66,27 +66,73 @@ const TRANSFORMERS: NodeTransformer<any>[] = [
 
 function collectDeclaredVariables(ast: any): Set<string> {
   const declared = new Set<string>();
+
+  function addFromPattern(pattern: any) {
+    if (!pattern || typeof pattern !== "object") return;
+    switch (pattern.type) {
+      case "Identifier":
+        if (pattern.name) declared.add(pattern.name);
+        break;
+      case "ObjectPattern":
+        for (const prop of pattern.properties || []) {
+          if (prop && prop.type === "ObjectProperty") {
+            addFromPattern(prop.value);
+          } else if (prop && prop.type === "RestElement") {
+            addFromPattern(prop.argument);
+          }
+        }
+        break;
+      case "ArrayPattern":
+        for (const el of pattern.elements || []) {
+          if (!el) continue;
+          if (el.type === "RestElement") addFromPattern(el.argument);
+          else addFromPattern(el);
+        }
+        break;
+      case "AssignmentPattern":
+        addFromPattern(pattern.left);
+        break;
+      case "RestElement":
+        addFromPattern(pattern.argument);
+        break;
+      default:
+        break;
+    }
+  }
+
   function walk(node: any) {
     if (!node || typeof node !== "object") return;
-    if (node.type === "VariableDeclarator" && node.id?.name) {
-      declared.add(node.id.name);
+
+    if (node.type === "VariableDeclarator") {
+      if (node.id?.type === "Identifier") {
+        declared.add(node.id.name);
+      } else {
+        // Destructuring declarations: let { a:b } = ...
+        addFromPattern(node.id);
+      }
     }
+
     if (
       node.type === "FunctionDeclaration" ||
       node.type === "FunctionExpression" ||
       node.type === "ArrowFunctionExpression"
     ) {
       if (node.id?.name) declared.add(node.id.name);
-      node.params?.forEach((param: any) => {
-        if (param.type === "Identifier") declared.add(param.name);
-      });
+      node.params?.forEach((param: any) => addFromPattern(param));
     }
+
+    // Treat assignment LHS identifiers and patterns as declared for renaming stability
+    if (node.type === "AssignmentExpression") {
+      addFromPattern(node.left);
+    }
+
     for (const key in node) {
       const value = node[key];
       if (Array.isArray(value)) value.forEach(walk);
       else if (typeof value === "object" && value !== null) walk(value);
     }
   }
+
   walk(ast);
   return declared;
 }
