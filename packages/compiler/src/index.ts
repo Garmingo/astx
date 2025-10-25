@@ -91,7 +91,10 @@ function collectDeclaredVariables(ast: any): Set<string> {
   return declared;
 }
 
-export function compile(jsCode: string): CompiledProgram {
+export function compile(
+  jsCode: string,
+  skipTransformers: string[] = []
+): CompiledProgram {
   const ast = babelParser.parse(jsCode, { sourceType: "module" });
   const valueDict: any[] = [];
   const expressionDict: string[] = [];
@@ -149,6 +152,11 @@ export function compile(jsCode: string): CompiledProgram {
           if (!path.node) {
             // Skip removed nodes
             break;
+          }
+
+          if (skipTransformers.includes(transformer.key)) {
+            // Skip this transformer
+            continue;
           }
 
           const matchesPhase = transformer.phases
