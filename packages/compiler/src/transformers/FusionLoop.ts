@@ -50,7 +50,6 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
     const i = context.helpers.generateUid("i");
     const resultId = node.id as t.Identifier;
 
-    const body: t.Statement[] = [];
     const hoisted: t.VariableDeclaration[] = [];
     let finalExpr: t.Expression = resultId;
 
@@ -63,7 +62,7 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
 
     for (let idx = 0; idx < steps.length; idx++) {
       const call = steps[idx];
-      if (!t.isMemberExpression(call.callee)) continue;
+      if (!t.isMemberExpression(call?.callee)) continue;
       const prop = call.callee.property;
       if (!t.isIdentifier(prop)) continue;
 
@@ -184,13 +183,34 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
       );
     }
 
-    const outerLet = t.variableDeclaration("let", [
-      t.variableDeclarator(resultId),
-    ]);
-    context.helpers.replaceNode(context.parent!, [
-      outerLet,
-      t.blockStatement(block),
-    ]);
+    // Replace only the current declarator, preserving siblings before/after
+    const parentDecl = context.parent as t.VariableDeclaration;
+    const kind = parentDecl.kind;
+    const decls = parentDecl.declarations;
+    const idxInParent = decls.indexOf(node as t.VariableDeclarator);
+
+    const before = decls.slice(0, idxInParent);
+    const after = decls.slice(idxInParent + 1);
+
+    const replacement: t.Statement[] = [];
+
+    if (before.length > 0) {
+      replacement.push(t.variableDeclaration(kind, before));
+    }
+
+    // Declare the result variable (no init yet)
+    replacement.push(
+      t.variableDeclaration(kind, [t.variableDeclarator(resultId)])
+    );
+
+    // The fused computation in a scoped block
+    replacement.push(t.blockStatement(block));
+
+    if (after.length > 0) {
+      replacement.push(t.variableDeclaration(kind, after));
+    }
+
+    context.helpers.replaceNode(parentDecl, replacement);
     return null;
   },
 };
