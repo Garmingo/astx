@@ -49,17 +49,61 @@ export const ForEachToForTransformer: NodeTransformer<t.CallExpression> = {
         ? indexParamRaw
         : context.helpers.generateUid("i");
 
-    const itemId =
-      itemParamRaw && t.isIdentifier(itemParamRaw)
-        ? itemParamRaw
-        : context.helpers.generateUid("item");
+    // Hoist the array expression into a temporary to avoid re-evaluating it
+    const arrayId = context.helpers.generateUid("arr");
+    // Insert: const <arrayId> = <array>;
+    context.helpers.insertBefore(
+      t.variableDeclaration("const", [t.variableDeclarator(arrayId, array)])
+    );
 
-    // Construct loop body
-    const loopBodyStatements: t.Statement[] = [
-      t.variableDeclaration("const", [
-        t.variableDeclarator(itemId, t.memberExpression(array, indexId, true)),
-      ]),
-    ];
+    // Construct loop body: create item binding (supports destructuring patterns)
+    const loopBodyStatements: t.Statement[] = [];
+
+    if (itemParamRaw) {
+      if (t.isIdentifier(itemParamRaw)) {
+        // const item = arr[index];
+        loopBodyStatements.push(
+          t.variableDeclaration("const", [
+            t.variableDeclarator(
+              itemParamRaw,
+              t.memberExpression(arrayId, indexId, true)
+            ),
+          ])
+        );
+      } else if (t.isPattern(itemParamRaw)) {
+        // const [a,b] = arr[index]; or const {x} = arr[index];
+        loopBodyStatements.push(
+          t.variableDeclaration("const", [
+            t.variableDeclarator(
+              itemParamRaw as t.LVal,
+              t.memberExpression(arrayId, indexId, true)
+            ),
+          ])
+        );
+      } else {
+        // Fallback: assign to generated item identifier
+        const itemId = context.helpers.generateUid("item");
+        loopBodyStatements.push(
+          t.variableDeclaration("const", [
+            t.variableDeclarator(
+              itemId,
+              t.memberExpression(arrayId, indexId, true)
+            ),
+          ])
+        );
+      }
+    } else {
+      // No item param — still evaluate the access once
+      const itemId = context.helpers.generateUid("item");
+      loopBodyStatements.push(
+        t.variableDeclaration("const", [
+          t.variableDeclarator(
+            itemId,
+            t.memberExpression(arrayId, indexId, true)
+          ),
+        ])
+      );
+    }
 
     if (t.isBlockStatement(callback.body)) {
       loopBodyStatements.push(...callback.body.body);
@@ -74,7 +118,7 @@ export const ForEachToForTransformer: NodeTransformer<t.CallExpression> = {
       t.binaryExpression(
         "<",
         indexId,
-        t.memberExpression(array, t.identifier("length"))
+        t.memberExpression(arrayId, t.identifier("length"))
       ),
       t.updateExpression("++", indexId),
       t.blockStatement(loopBodyStatements)
