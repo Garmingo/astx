@@ -72,9 +72,7 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
       if ((method === "map" || method === "filter") && isFn(argFn)) {
         const fnId = context.helpers.generateUid(`${method}Fn`);
         hoisted.push(
-          t.variableDeclaration("const", [
-            t.variableDeclarator(fnId, argFn as any),
-          ])
+          t.variableDeclaration("const", [t.variableDeclarator(fnId, argFn)])
         );
 
         if (method === "map") {
@@ -99,7 +97,7 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
         reduceInit = call.arguments[1] as t.Expression;
         hoisted.push(
           t.variableDeclaration("const", [
-            t.variableDeclarator(reduceFnId, argFn as any),
+            t.variableDeclarator(reduceFnId, argFn),
           ])
         );
         break;
@@ -215,7 +213,10 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
   },
 };
 
-function isFn(n: any): n is t.ArrowFunctionExpression | t.FunctionExpression {
+function isFn(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  n: any
+): n is t.ArrowFunctionExpression | t.FunctionExpression {
   return t.isArrowFunctionExpression(n) || t.isFunctionExpression(n);
 }
 
