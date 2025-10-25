@@ -109,6 +109,12 @@ export function compile(
   const phases: Phase[] = ["pre", "main", "post"];
   const sharedData: Record<string, any> = {};
 
+  if (skipTransformers.length > 0) {
+    console.log(
+      `[ASTX-Compiler] Skipping transformers: ${skipTransformers.join(", ")}`
+    );
+  }
+
   for (const phase of phases) {
     traverse(ast, {
       enter(path) {
