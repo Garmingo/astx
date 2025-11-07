@@ -386,6 +386,11 @@ export function compile(
 }
 
 export function saveToFile(program: CompiledProgram, filename: string) {
+  const buffer = toBuffer(program);
+  writeFileSync(filename, buffer);
+}
+
+export function toBuffer(program: CompiledProgram): Buffer {
   const encoded = msgPackEncode([
     program.expressionDict,
     program.valueDict,
@@ -394,6 +399,5 @@ export function saveToFile(program: CompiledProgram, filename: string) {
   const magic = MAGIC_HEADER; // custom magic header
   const version = FORMAT_VERSION; // format version
   const compressed = Buffer.from(compress(Buffer.from(encoded)));
-  const full = Buffer.concat([magic, version, compressed]);
-  writeFileSync(filename, full);
+  return Buffer.concat([magic, version, compressed]);
 }
