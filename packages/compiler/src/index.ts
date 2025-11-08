@@ -139,7 +139,7 @@ function collectDeclaredVariables(ast: any): Set<string> {
 
 export function compile(
   jsCode: string,
-  skipTransformers: string[] = []
+  skipTransformers: string[] | "all" | "keep-functional" = []
 ): CompiledProgram {
   const ast = babelParser.parse(jsCode, { sourceType: "module" });
   const valueDict: any[] = [];
@@ -154,6 +154,20 @@ export function compile(
   // Transformers
   const phases: Phase[] = ["pre", "main", "post"];
   const sharedData: Record<string, any> = {};
+
+  if (skipTransformers === "all") {
+    console.log(`[ASTX-Compiler] Skipping all transformers.`);
+    skipTransformers = TRANSFORMERS.map((t) => t.key);
+  }
+
+  if (skipTransformers === "keep-functional") {
+    console.log(`[ASTX-Compiler] Keeping functional transformers.`);
+    const functionalTransformers = ["restore-exported-names"];
+
+    skipTransformers = TRANSFORMERS.filter((t) =>
+      functionalTransformers.includes(t.key)
+    ).map((t) => t.key);
+  }
 
   if (skipTransformers.length > 0) {
     console.log(
