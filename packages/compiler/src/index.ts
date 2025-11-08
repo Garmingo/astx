@@ -164,8 +164,9 @@ export function compile(
     console.log(`[ASTX-Compiler] Keeping functional transformers.`);
     const functionalTransformers = ["restore-exported-names"];
 
-    skipTransformers = TRANSFORMERS.filter((t) =>
-      functionalTransformers.includes(t.key)
+    skipTransformers = TRANSFORMERS.filter(
+      // Only keep functional transformers - skip all others
+      (t) => !functionalTransformers.includes(t.key)
     ).map((t) => t.key);
   }
 
