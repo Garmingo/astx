@@ -89,6 +89,7 @@ export const MINIMAL_AST_KEYS: Record<string, string[]> = {
   FunctionExpression: ["id", "params", "body", "generator", "async"],
   SequenceExpression: ["expressions"],
   YieldExpression: ["argument", "delegate"],
+  TaggedTemplateExpression: ["tag", "quasi"],
 
   // Statements
   IfStatement: ["test", "consequent", "alternate"],
