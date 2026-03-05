@@ -47,6 +47,7 @@ import { UnchainFilterToLoopTransformer } from "./transformers/UnchainFilterToLo
 import { UnchainReduceToLoopTransformer } from "./transformers/UnchainReduceToLoop";
 import { FusionLoopTransformer } from "./transformers/FusionLoop";
 import { RestoreExportedNamesTransformer } from "./transformers/RestoreExportedNames";
+import { TreeShakingTransformer } from "./transformers/TreeShaking";
 
 // Re-export AstxCodec so callers don't need to import from @astx/shared directly
 export type { AstxCodec };
@@ -142,6 +143,7 @@ function createDefaultNodeCodec(): AstxCodec {
 // ─── Variable collection ─────────────────────────────────────────────────────
 
 const TRANSFORMERS: NodeTransformer<any>[] = [
+  TreeShakingTransformer,
   ForEachToForTransformer,
   ConstantFoldingTransformer,
   DeadCodeEliminationTransformer,
@@ -260,6 +262,7 @@ export function compile(
     // skips the loop-fusion / unchaining transformers that rewrite call-chain
     // semantics, and retains the lightweight, purely-syntactic transforms.
     const functionalTransformers = [
+      "tree-shaking",
       "restore-exported-names",
       "constant-folding",
       "dead-code-elimination",

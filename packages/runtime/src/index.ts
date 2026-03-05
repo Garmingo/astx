@@ -34,7 +34,7 @@ import { default as _generate } from "@babel/generator";
 const generate = safeESModule(_generate);
 
 // Re-export codec types for callers who use only the runtime
-export type { AstxCodec, AstxCodecOptions };
+export type { AstxCodec, AstxCodecOptions, CompiledProgram };
 
 export interface LoadBufferOptions {
   /** Custom codec (default: Node.js built-in zstd via node:zlib). */
@@ -387,4 +387,87 @@ export function run(compiled: CompiledProgram, options: RunOptions = {}) {
   }
 
   throw new Error(`Unknown run mode: ${mode}`);
+}
+
+// ─── Source Map Consumer ─────────────────────────────────────────────────────
+
+/**
+ * An original source position resolved from an ASTX source map.
+ */
+export interface SourceLocation {
+  /** 1-based line number in the original JS source. */
+  line: number;
+  /** 0-based column number in the original JS source. */
+  column: number;
+}
+
+export interface SourceMapConsumer {
+  /**
+   * Return the original source position for a bytecode slot index.
+   * Returns `null` for synthetic (generated) nodes that have no source location.
+   */
+  lookup(bytecodeIndex: number): SourceLocation | null;
+
+  /**
+   * Return every bytecode slot that has a recorded source location,
+   * sorted by bytecode index.  Useful for coverage analysis.
+   */
+  allPositions(): Array<{ bytecodeIndex: number } & SourceLocation>;
+
+  /**
+   * Find the bytecode slot(s) closest to a given original source line.
+   * Handy for mapping a runtime error position back to the original file.
+   */
+  findSlotsByLine(line: number): number[];
+}
+
+/**
+ * Create a {@link SourceMapConsumer} from a compiled program that was compiled
+ * with the `{ sourceMap: true }` option.
+ *
+ * Returns `null` if no source map is attached to the program.
+ *
+ * @example
+ * ```ts
+ * const program = compile(source, [], { sourceMap: true });
+ * const buf = await toBuffer(program);
+ * const loaded = await loadFromBuffer(buf);
+ *
+ * const consumer = createSourceMapConsumer(loaded);
+ * if (consumer) {
+ *   console.log(consumer.lookup(0)); // { line: 1, column: 0 }
+ * }
+ * ```
+ */
+export function createSourceMapConsumer(
+  program: CompiledProgram,
+): SourceMapConsumer | null {
+  const map = program.sourceMap;
+  if (!map || map.length === 0) return null;
+
+  return {
+    lookup(bytecodeIndex: number): SourceLocation | null {
+      const entry = map[bytecodeIndex] ?? null;
+      if (!entry) return null;
+      return { line: entry[0], column: entry[1] };
+    },
+
+    allPositions() {
+      const out: Array<{ bytecodeIndex: number } & SourceLocation> = [];
+      for (let i = 0; i < map.length; i++) {
+        const entry = map[i];
+        if (entry)
+          out.push({ bytecodeIndex: i, line: entry[0], column: entry[1] });
+      }
+      return out;
+    },
+
+    findSlotsByLine(line: number): number[] {
+      const out: number[] = [];
+      for (let i = 0; i < map.length; i++) {
+        if (map[i]?.[0] === line) out.push(i);
+      }
+      return out;
+    },
+  };
 }

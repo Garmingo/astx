@@ -13,10 +13,13 @@
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
     "build": "tsup",
+    "test": "vitest run",
+    "bench": "vitest bench",
     "prepack": "npm run build"
   },
   "license": "GPL-3.0-only",
   "devDependencies": {
+    "@astx/compiler": "^2.4.3",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/babel__generator": "^7.27.0",
@@ -24,7 +27,8 @@
     "eslint": "^9.35.0",
     "ts-node": "^10.9.2",
     "tsup": "^8.5.0",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@astx/shared": "workspace:*",

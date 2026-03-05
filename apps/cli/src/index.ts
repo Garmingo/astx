@@ -19,7 +19,7 @@
 import { compile, saveToFile } from "@astx/compiler";
 import { generateJSCode, loadFromFile, run } from "@astx/runtime";
 import { program } from "commander";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync, watch as fsWatch } from "fs";
 import path from "path";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -29,25 +29,57 @@ program
 
   .command("compile <input> <output>")
   .description("Compile .js to .astx")
-  .action(async (input, output) => {
-    console.log("Compiling...");
-
-    const start = performance.now();
-    const fileContent = readFileSync(input, "utf-8");
-
-    if (!fileContent) {
-      console.error("File not found");
-      process.exit(1);
-    }
-
-    const compiled = compile(fileContent);
-
+  .option("-w, --watch", "Watch the input file and recompile on changes")
+  .action(async (input: string, output: string, opts: { watch?: boolean }) => {
     if (!output.endsWith(".astx")) {
       output += ".astx";
     }
 
-    await saveToFile(compiled, output);
-    console.log(`Compiled in ${performance.now() - start}ms`);
+    async function doCompile() {
+      const start = performance.now();
+      const fileContent = readFileSync(input, "utf-8");
+
+      if (!fileContent) {
+        console.error("File not found");
+        process.exit(1);
+      }
+
+      const compiled = compile(fileContent);
+      await saveToFile(compiled, output);
+      console.log(
+        `[${new Date().toLocaleTimeString()}] Compiled ${input} → ${output} in ${(performance.now() - start).toFixed(1)}ms`,
+      );
+    }
+
+    if (opts.watch) {
+      console.log(`Watching ${input} for changes… (Ctrl+C to stop)`);
+
+      // Initial compile
+      await doCompile();
+
+      // Node.js built-in fs.watch – no extra dependencies
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+      fsWatch(input, () => {
+        // Debounce rapid successive events (e.g., editor save-flush)
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(async () => {
+          try {
+            await doCompile();
+          } catch (err) {
+            console.error(
+              `[${new Date().toLocaleTimeString()}] Compile error:`,
+              (err as Error).message,
+            );
+          }
+        }, 50);
+      });
+
+      // Keep the process alive
+      process.stdin.resume();
+    } else {
+      console.log("Compiling...");
+      await doCompile();
+    }
   });
 
 program

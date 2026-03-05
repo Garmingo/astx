@@ -197,6 +197,25 @@ export const MINIMAL_AST_KEYS: Record<string, string[]> = {
   CatchClause: ["param", "body"],
   Super: [],
   ExportSpecifier: ["local", "exported"],
+
+  // ES Module imports
+  ImportDeclaration: ["specifiers", "source"],
+  ImportDefaultSpecifier: ["local"],
+  ImportNamespaceSpecifier: ["local"],
+  ImportSpecifier: ["local", "imported"],
+
+  // Additional exports
+  ExportAllDeclaration: ["source", "exported"],
+  ExportNamespaceSpecifier: ["exported"],
+
+  // Decorators
+  Decorator: ["expression"],
+
+  // Meta properties (new.target, import.meta)
+  MetaProperty: ["meta", "property"],
+
+  // Miscellaneous
+  InterpreterDirective: ["value"],
 };
 
 /**
