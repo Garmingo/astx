@@ -32,8 +32,30 @@ const program = compile(`
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `sourceMap` | `boolean` | `false` | Attach `[line, col]` info to every bytecode slot |
+| `verbose` | `boolean` | `false` | Print transformer activity to the logger |
+| `logger` | `CompileLogger` | `console` | Custom logger – implement `{ log, warn }` to redirect output |
 
 `skipTransformers` is an optional array of transformer names to disable for this compilation.
+
+**Controlling log output:**
+
+By default all `[ASTX-Compiler]` output is suppressed (`verbose: false`). Enable it or route it to your own logging system:
+
+```ts
+// Enable built-in console output
+const program = compile(source, [], { verbose: true });
+
+// Redirect to a custom logger (e.g. pino, winston, a test spy)
+const program = compile(source, [], {
+  verbose: true,
+  logger: {
+    log: (...args) => myLogger.debug(args.join(" ")),
+    warn: (...args) => myLogger.warn(args.join(" ")),
+  },
+});
+```
+
+> `.warn()` is always forwarded regardless of `verbose` so transformer errors are never silently swallowed.
 
 ---
 
@@ -93,6 +115,7 @@ The compiler runs these optimisation passes automatically before encoding:
 
 | Transformer | What it does |
 |---|---|
+| `TreeShaking` | Removes unused top-level function, class, and side-effect-free variable declarations |
 | `ConstantFolding` | Evaluates constant expressions at compile time (`2 + 3` → `5`) |
 | `DeadCodeElimination` | Removes unreachable code after `return`/`throw`/`break`/`continue` |
 | `LogicalSimplification` | Simplifies `!!x`, `x === true`, `x === false`, etc. |
@@ -113,6 +136,26 @@ To disable individual transformers:
 ```ts
 const program = compile(source, ["FusionLoop", "PowToMultiply"]);
 ```
+
+---
+
+## Benchmarks
+
+The package ships Vitest benchmarks for `compile()` and `toBuffer()` against small, medium, and large JS fixtures.
+
+```bash
+pnpm bench
+```
+
+Example results (Apple M-series):
+
+| Benchmark | ops/sec |
+|---|---|
+| `compile()` – small program | ~5 400 |
+| `compile()` – medium program | ~1 900 |
+| `compile()` – large program | ~330 |
+| `toBuffer()` – small → binary | ~47 000 |
+| `toBuffer()` – large → binary | ~20 500 |
 
 ---
 

@@ -24,6 +24,24 @@ astx compile src/index.js dist/index.astx
 
 The `.astx` extension is appended automatically if omitted from `<output>`.
 
+#### `--watch` / `-w`
+
+Watch the input file and recompile automatically on every save.
+
+```bash
+astx compile --watch src/index.js dist/index.astx
+```
+
+Each recompile prints a timestamped line:
+
+```
+Watching src/index.js for changes… (Ctrl+C to stop)
+[12:34:56] Compiled src/index.js → dist/index.astx in 12.4ms
+[12:35:02] Compiled src/index.js → dist/index.astx in 11.9ms
+```
+
+Compile errors during watch are printed without stopping the watcher.
+
 ---
 
 ### `astx run <file>`

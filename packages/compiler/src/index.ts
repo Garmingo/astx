@@ -55,12 +55,38 @@ export type { AstxCodecOptions } from "@astx/shared";
 
 // ─── Public options types ────────────────────────────────────────────────────
 
+/**
+ * Minimal logger interface accepted by {@link CompileOptions.logger}.
+ * Implement this to redirect compiler output into your own logging system
+ * (e.g. pino, winston, a test spy, …).
+ */
+export interface CompileLogger {
+  /** Called for informational messages (only when `verbose` is `true`). */
+  log(...args: unknown[]): void;
+  /** Called for warnings (transformer failures). Always called regardless of `verbose`. */
+  warn(...args: unknown[]): void;
+}
+
 export interface CompileOptions {
   /**
    * Generate a source map: one [line, col] entry per bytecode slot.
    * Null entries denote synthetic (generated) nodes.
    */
   sourceMap?: boolean;
+
+  /**
+   * Enable verbose compiler logging.
+   * When `false` (default) all `[ASTX-Compiler]` log lines are suppressed.
+   * When `true` the compiler logs which transformers are applied and to which nodes.
+   */
+  verbose?: boolean;
+
+  /**
+   * Custom logger used instead of `console` when provided.
+   * Only informational (`.log`) calls respect `verbose`;
+   * warning (`.warn`) calls are always forwarded.
+   */
+  logger?: CompileLogger;
 }
 
 export interface ToBufferOptions {
@@ -247,17 +273,27 @@ export function compile(
   const seenVars = new Map<string, number>();
   let varCounter = 0;
 
+  // ─── Logger setup ─────────────────────────────────────────────────────────
+  const verbose = opts?.verbose ?? false;
+  const _logger: CompileLogger = opts?.logger ?? console;
+  /** Log only when verbose is enabled. */
+  const log = (...args: unknown[]) => {
+    if (verbose) _logger.log(...args);
+  };
+  /** Always log warnings (transformer failures etc.), respecting custom logger. */
+  const warn = (...args: unknown[]) => _logger.warn(...args);
+
   // Transformers
   const phases: Phase[] = ["pre", "main", "post"];
   const sharedData: Record<string, any> = {};
 
   if (skipTransformers === "all") {
-    console.log(`[ASTX-Compiler] Skipping all transformers.`);
+    log(`[ASTX-Compiler] Skipping all transformers.`);
     skipTransformers = TRANSFORMERS.map((t) => t.key);
   }
 
   if (skipTransformers === "keep-functional") {
-    console.log(`[ASTX-Compiler] Keeping functional transformers.`);
+    log(`[ASTX-Compiler] Keeping functional transformers.`);
     // All transformers have been audited and fixed.  "keep-functional" now only
     // skips the loop-fusion / unchaining transformers that rewrite call-chain
     // semantics, and retains the lightweight, purely-syntactic transforms.
@@ -277,7 +313,7 @@ export function compile(
   }
 
   if (skipTransformers.length > 0) {
-    console.log(
+    log(
       `[ASTX-Compiler] Skipping transformers: ${skipTransformers.join(", ")}`,
     );
   }
@@ -341,7 +377,7 @@ export function compile(
           const passesTest = transformer.test(path.node, context);
 
           if (matchesPhase && matchesType && passesTest) {
-            console.log(
+            log(
               `[ASTX-Compiler][${phase.toUpperCase()}] Applying transformer "${
                 transformer.displayName
               }" (${transformer.key}) to node: ${
@@ -368,7 +404,7 @@ export function compile(
                 path.replaceWith(result);
               }
             } catch (e) {
-              console.warn(
+              warn(
                 `[ASTX-Compiler][${phase.toUpperCase()}] Transformer "${
                   transformer.displayName
                 }" (${transformer.key}) failed: ${e}`,
