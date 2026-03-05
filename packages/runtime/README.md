@@ -1,46 +1,111 @@
-# astx (Abstract Syntax Tree Executable)
-A **very early** stage project to compile and run JavaScript to an AST-based binary format.
+# @astx/runtime
 
-The goal is to drastically reduce the size of JS files by compiling them to a binary format.
-This is not a replacement for minification or obfuscation, but because of its binary format it is harder to reverse engineer similar to other compiled languages.
+Decodes and executes ASTX binary files. Part of the [ASTX monorepo](../../README.md).
 
-ASTX is a binary format that represents an Abstract Syntax Tree (AST) of a JavaScript program.
-The AST is serialized to a binary format that can be executed from within **any** JavaScript runtime using this library.
-That means that every JavaScript program can be compiled to an ASTX binary file and executed by the ASTX runtime library from within a JavaScript environment.
-
-This project is inspired by [WebAssembly](https://webassembly.org/), but it is not meant to be a replacement for it.
-
-## Benefits of working with an AST-based binary format
-- **Size**: The binary format is smaller than the original JavaScript source code.
-- **Feature support**: Since we are working on the JavaScript AST, we can support all JavaScript features. (Some features **might** not be fully supported yet)
-- **Performance**: The ASTX runtime can optimize the execution of the program.
-- **Security**: The binary format is harder to reverse engineer than the original JavaScript source code.
-- **Optimization**: The ASTX compiler has *theoretically* all the benefits of a compiler, like optimizations and dead code elimination.
-- **Runtime Independence**: The ASTX runtime can theoretically be implemented in any language, not just JavaScript (although **this** implementation is in JavaScript).
+---
 
 ## Installation
+
 ```bash
 npm install @astx/runtime
 ```
 
-## Usage
+---
 
-### Compiling
-Refer to `@astx/compiler` for more details.
+## API
 
-### Running
-```javascript
-import { loadFromFile, run } from '@astx/runtime';
+### `loadFromBuffer(buffer, opts?): Promise<CompiledProgram>`
 
-const program = loadFromFile('program.astx');
-const result = run(program); 
-// or
-run(program)
+Decodes an ASTX binary from a `Uint8Array` or `Buffer`.
+
+```ts
+import { loadFromBuffer, run } from "@astx/runtime";
+
+const response = await fetch("/app.astx");
+const bytes = new Uint8Array(await response.arrayBuffer());
+const program = await loadFromBuffer(bytes);
+run(program);
 ```
 
+**Options (`LoadBufferOptions`):**
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `codec` | `AstxCodec` | Node.js built-in zstd | Custom decompression implementation |
+| `dict` | `Uint8Array` | — | Zstd dictionary (must match the one used when compiling) |
+
+---
+
+### `loadFromFile(filename, opts?): Promise<CompiledProgram>`
+
+Reads an `.astx` file from disk and decodes it. **Node.js only.**
+
+```ts
+import { loadFromFile, run } from "@astx/runtime";
+
+const program = await loadFromFile("app.astx");
+run(program, { mode: "vm" });
+```
+
+---
+
+### `run(program, opts?)`
+
+Executes a decoded `CompiledProgram`.
+
+```ts
+run(program, {
+  mode: "vm",          // 'vm' (Node.js vm module) | 'eval' (direct eval)
+  inject: {            // variables injected into the program's scope
+    __dirname: "/app",
+    __filename: "/app/index.astx",
+  },
+});
+```
+
+---
+
+### `generateJSCode(program): string`
+
+Converts a decoded `CompiledProgram` back to JavaScript source. Useful for debugging — the output is not minified or human-readable.
+
+```ts
+import { loadFromFile, generateJSCode } from "@astx/runtime";
+
+const program = await loadFromFile("app.astx");
+console.log(generateJSCode(program));
+```
+
+---
+
+## Browser support
+
+All APIs are browser-compatible. The default codec uses `node:zlib` via a dynamic import — in a browser you must supply a custom `AstxCodec`:
+
+```ts
+import { decompress } from "fzstd"; // pure-JS Zstd decompressor
+import { loadFromBuffer, run } from "@astx/runtime";
+
+const bytes = new Uint8Array(await (await fetch("/app.astx")).arrayBuffer());
+const program = await loadFromBuffer(bytes, {
+  codec: {
+    compress: async () => { throw new Error("not needed"); },
+    decompress: async (data) => decompress(data),
+  },
+});
+run(program);
+```
+
+---
+
 ## Known limitations
-- **working directory**: The working directory of the ASTX runtime is the working directory of the execution environment, meaning that **require** and **import** statements will be relative to the working directory of the execution environment and **NOT** the working directory of the .astx file.
+
+- **Relative `require`/`import` paths** – resolved relative to the working directory of the host process, not the `.astx` file's original location. Use the `inject` option to set `__dirname` / `__filename` when using `vm` mode.
+- **Dynamic `import()` inside `.astx`** – partially supported in `vm` mode.
+
+---
 
 ## License
-This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE) file for details.
+
+GPL-3.0 — see [LICENSE](LICENSE).
 

@@ -1,49 +1,129 @@
-# astx (Abstract Syntax Tree Executable)
-A **very early** stage project to compile and run JavaScript to an AST-based binary format.
+# @astx/compiler
 
-The goal is to drastically reduce the size of JS files by compiling them to a binary format.
-This is not a replacement for minification or obfuscation, but because of its binary format it is harder to reverse engineer similar to other compiled languages.
+Compiles JavaScript source code to the ASTX binary format. Part of the [ASTX monorepo](../../README.md).
 
-ASTX is a binary format that represents an Abstract Syntax Tree (AST) of a JavaScript program.
-The AST is serialized to a binary format that can be executed from within **any** JavaScript runtime using this library.
-That means that every JavaScript program can be compiled to an ASTX binary file and executed by the ASTX runtime library from within a JavaScript environment.
-
-This project is inspired by [WebAssembly](https://webassembly.org/), but it is not meant to be a replacement for it.
-
-## Benefits of working with an AST-based binary format
-- **Size**: The binary format is smaller than the original JavaScript source code.
-- **Feature support**: Since we are working on the JavaScript AST, we can support all JavaScript features. (Some features **might** not be fully supported yet)
-- **Performance**: The ASTX runtime can optimize the execution of the program.
-- **Security**: The binary format is harder to reverse engineer than the original JavaScript source code.
-- **Optimization**: The ASTX compiler has *theoretically* all the benefits of a compiler, like optimizations and dead code elimination.
-- **Runtime Independence**: The ASTX runtime can theoretically be implemented in any language, not just JavaScript (although **this** implementation is in JavaScript).
+---
 
 ## Installation
+
 ```bash
 npm install @astx/compiler
 ```
 
-## Usage
+---
 
-### Compiling
-```javascript
-import { compile, saveToFile } from '@astx/lib';
+## API
+
+### `compile(code, skipTransformers?, opts?)`
+
+Parses and optimises JavaScript source code, returns a `CompiledProgram`.
+
+```ts
+import { compile } from "@astx/compiler";
 
 const program = compile(`
-  function main() {
-    return 1 + 2;
-  }
+  const result = 2 ** 10;
+  console.log(result);
 `);
-
-saveToFile(program, 'program.astx');
 ```
 
-### Running
-Refer to `@astx/runtime` for more details.
+**Options (`CompileOptions`):**
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `sourceMap` | `boolean` | `false` | Attach `[line, col]` info to every bytecode slot |
+
+`skipTransformers` is an optional array of transformer names to disable for this compilation.
+
+---
+
+### `toBuffer(program, opts?): Promise<Uint8Array>`
+
+Serialises a `CompiledProgram` to the compressed ASTX binary format.
+
+```ts
+import { compile, toBuffer } from "@astx/compiler";
+
+const program = compile(source);
+const bytes = await toBuffer(program);
+```
+
+**Options (`ToBufferOptions`):**
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `codec` | `AstxCodec` | Node.js built-in zstd | Custom compress/decompress implementation |
+| `level` | `number` | `22` | Zstd compression level (1–22) |
+| `dict` | `Uint8Array` | — | Pre-trained Zstd dictionary (requires custom codec) |
+
+---
+
+### `saveToFile(program, filename, opts?): Promise<void>`
+
+Convenience wrapper: serialises and writes the binary to disk. **Node.js only.**
+
+```ts
+import { compile, saveToFile } from "@astx/compiler";
+
+const program = compile(source);
+await saveToFile(program, "output.astx");
+```
+
+---
+
+## Browser support
+
+All APIs are browser-compatible. The default codec uses `node:zlib` via a dynamic import — in a browser you must supply a custom `AstxCodec`:
+
+```ts
+import { compress, decompress } from "@mongodb-js/zstd"; // WASM-backed
+import { compile, toBuffer } from "@astx/compiler";
+
+const program = compile(source);
+const bytes = await toBuffer(program, {
+  codec: { compress, decompress },
+});
+```
+
+---
+
+## AST Transformers
+
+The compiler runs these optimisation passes automatically before encoding:
+
+| Transformer | What it does |
+|---|---|
+| `ConstantFolding` | Evaluates constant expressions at compile time (`2 + 3` → `5`) |
+| `DeadCodeElimination` | Removes unreachable code after `return`/`throw`/`break`/`continue` |
+| `LogicalSimplification` | Simplifies `!!x`, `x === true`, `x === false`, etc. |
+| `PowToMultiply` | Replaces `x ** 2` / `x ** 3` with equivalent multiplications |
+| `ForEachToForLoop` | Converts `.forEach(cb)` to a `for` loop |
+| `ForOfToIndexed` | Converts `for…of` over arrays to index-based `for` loops |
+| `FusionLoop` | Merges consecutive loops over the same array |
+| `HoistArrayLength` | Caches `arr.length` outside the loop condition |
+| `UnchainMapToLoop` | Converts `.map(fn)` chains to `for` loops |
+| `UnchainFilterToLoop` | Converts `.filter(fn)` chains to `for` loops |
+| `UnchainReduceToLoop` | Converts `.reduce(fn)` chains to `for` loops |
+| `AssignedArrowToFunction` | Converts assigned arrow functions to regular `function` expressions (scope-aware) |
+| `InlineArrowToFunction` | Converts inline arrow callbacks to `function` expressions where safe |
+| `RestoreExportedNames` | Preserves original names for exported bindings after renaming passes |
+
+To disable individual transformers:
+
+```ts
+const program = compile(source, ["FusionLoop", "PowToMultiply"]);
+```
+
+---
 
 ## Known limitations
-- **Transformer side-effects**: Since we are now basically are doing AOT (Ahead Of Time) compilation, we can run transformers to improve the code. These transformers can have side-effects (if they are faulty) that can change the behavior of the program. This is not a limitation per se, but it is something to be aware of.
+
+- **AOT side-effects** – Transformers may change observable behaviour if the input code relies on subtle JS semantics (e.g. exact prototype chains, `arguments` binding). Review the transformer list above for caveats.
+- **Dynamic `import()` and top-level `await`** – Partially supported; behaviour depends on the runtime execution mode.
+
+---
 
 ## License
-This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE) file for details.
+
+GPL-3.0 — see [LICENSE](LICENSE).
 

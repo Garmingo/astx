@@ -1,139 +1,115 @@
-# ASTX Monorepo
-This is the monorepo for the ASTX project, which includes the compiler, runtime, and shared packages.
-ASTX is an AST-based binary format for JavaScript files. It is designed to be a fast and efficient way to distribute JavaScript code in a smaller size compared to traditional JavaScript files.
-It also allows for compiler level optimizations and tree-shaking.
+# ASTX — Abstract Syntax Tree Executable
 
-## Readme in progress
-This readme is currently a placeholder and will be updated soon with more information about the project, how to use it, and how to contribute.
+ASTX is an AST-based binary format for JavaScript. Instead of distributing raw source code, you compile JavaScript to a compact binary that any JavaScript runtime can execute via the ASTX runtime library.
 
-## Using this example
+> **Status:** Early stage – APIs may change between releases.
 
-Run the following command:
+---
 
-```sh
-npx create-turbo@latest
+## Why ASTX?
+
+| Goal | How ASTX achieves it |
+|---|---|
+| **Smaller distribution size** | AST nodes are encoded with MessagePack and compressed with Zstd (level 22) |
+| **AOT optimisations** | The compiler runs a configurable pipeline of AST transformers before encoding |
+| **Obfuscation** | Binary format is significantly harder to reverse-engineer than minified JS |
+| **Runtime independence** | The runtime only needs a JS engine – Node.js, Deno, Bun, or a browser |
+| **Full JS feature support** | Works at the AST level, so any syntactically valid JS can be compiled |
+
+---
+
+## Packages
+
+| Package | Description |
+|---|---|
+| [`@astx/compiler`](packages/compiler) | Parses, optimises, and encodes JS → `.astx` |
+| [`@astx/runtime`](packages/runtime) | Decodes and executes `.astx` files |
+| [`@astx/shared`](packages/shared) | Shared types, constants, and the wire-format spec |
+| [`@astx/cli`](apps/cli) | Command-line interface (`astx compile / run / gen`) |
+
+---
+
+## Quick start
+
+### Install
+
+```bash
+# Compiler (e.g. in a build script)
+npm install @astx/compiler
+
+# Runtime (e.g. in your app)
+npm install @astx/runtime
+
+# CLI (global)
+npm install -g @astx/cli
 ```
 
-## What's inside?
+### Compile
 
-This Turborepo includes the following packages/apps:
+```ts
+import { compile, saveToFile } from "@astx/compiler";
 
-### Apps and Packages
+const program = compile(`
+  function greet(name) {
+    console.log("Hello, " + name);
+  }
+  greet("world");
+`);
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+await saveToFile(program, "greet.astx");
 ```
 
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+### Run
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
+```ts
+import { loadFromFile, run } from "@astx/runtime";
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+const program = await loadFromFile("greet.astx");
+run(program, { mode: "vm" });
 ```
 
-### Develop
+### CLI
 
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
+```bash
+astx compile src/index.js dist/index.astx
+astx run dist/index.astx
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+---
+
+## Binary format (v0x02)
 
 ```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+[MAGIC_HEADER: 4 bytes] [FORMAT_VERSION: 1 byte] [Zstd-compressed payload]
+                                                         │
+                               ┌─────────────────────────┘
+                               ▼  (MessagePack array)
+                        [valueDict, bytecode, sourceMap | null]
 ```
 
-### Remote Caching
+- **valueDict** – deduplicated string/number/other literal values
+- **bytecode** – deduplicated array of encoded AST node arrays (index-referenced)
+- **sourceMap** – optional `[line, col][]` per bytecode slot; `null` entries for synthetic nodes
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+---
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+## Monorepo setup
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+This repo is managed with [pnpm workspaces](https://pnpm.io/workspaces) and [Turborepo](https://turbo.build/).
 
-```
-cd my-turborepo
+```bash
+# Install dependencies
+pnpm install
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
+# Build all packages
+pnpm -r build
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
+# Type-check all packages
+pnpm -r check-types
 ```
 
-## Useful Links
+---
 
-Learn more about the power of Turborepo:
+## License
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+GPL-3.0 — see individual package `LICENSE` files for details.
