@@ -29,7 +29,7 @@ program
 
   .command("compile <input> <output>")
   .description("Compile .js to .astx")
-  .action((input, output) => {
+  .action(async (input, output) => {
     console.log("Compiling...");
 
     const start = performance.now();
@@ -46,7 +46,7 @@ program
       output += ".astx";
     }
 
-    saveToFile(compiled, output);
+    await saveToFile(compiled, output);
     console.log(`Compiled in ${performance.now() - start}ms`);
   });
 
@@ -54,14 +54,14 @@ program
 
   .command("run <input>")
   .description("Run .astx files")
-  .action((input) => {
+  .action(async (input) => {
     console.log("Running...");
 
-    const program = loadFromFile(input);
+    const compiled = await loadFromFile(input);
 
     const folder = path.dirname(input);
 
-    run(program, {
+    run(compiled, {
       mode: "vm",
       inject: {
         __dirname: folder,
@@ -74,15 +74,15 @@ program
 
   .command("gen <input> <output>")
   .description(
-    "Generate .js code from .astx files (For debugging - code is not optimized or human readable)"
+    "Generate .js code from .astx files (For debugging - code is not optimized or human readable)",
   )
-  .action((input, output) => {
+  .action(async (input, output) => {
     console.log("Loading .astx file...");
 
-    const program = loadFromFile(input);
+    const compiled = await loadFromFile(input);
 
     console.log("Generating JS Code...");
-    const code = generateJSCode(program);
+    const code = generateJSCode(compiled);
 
     console.log("Saving to file...");
     writeFileSync(output, code);
@@ -92,7 +92,7 @@ program
 
   .command("version")
   .description(
-    "Show the version of the runtime and the astx/lib that includes the compiler"
+    "Show the version of the runtime and the astx/lib that includes the compiler",
   )
   .action(() => {
     console.log(`CLI: ${version}`);

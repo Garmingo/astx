@@ -32,12 +32,14 @@ export const UnchainReduceToLoopTransformer: NodeTransformer<t.VariableDeclarato
       const reduceIndex = chain.findIndex(
         (c) =>
           t.isMemberExpression(c.callee) &&
-          t.isIdentifier(c.callee.property, { name: "reduce" })
+          t.isIdentifier(c.callee.property, { name: "reduce" }),
       );
 
       if (reduceIndex === -1) return node;
 
       const reduceCall = chain[reduceIndex];
+      if (!reduceCall) return node; // narrowing for TS
+
       const reducerFn = reduceCall.arguments[0] as
         | t.FunctionExpression
         | t.ArrowFunctionExpression;
@@ -52,25 +54,24 @@ export const UnchainReduceToLoopTransformer: NodeTransformer<t.VariableDeclarato
 
       let arrayToReduce: t.Identifier | t.Expression = arrayExpr;
 
-      // 🧠 Optional pre-reduce chain
+      // 🧠 Optional pre-reduce chain: build chained calls WITHOUT wrapping in an extra call()
       if (reduceIndex > 0) {
-        const preReduceExpr = t.callExpression(
-          chain.slice(0, reduceIndex).reduce((obj, call) => {
+        const preReduceExpr = chain
+          .slice(0, reduceIndex)
+          .reduce<t.Expression>((obj, call) => {
             return t.callExpression(
               t.memberExpression(
                 obj,
-                (call.callee as t.MemberExpression).property
+                (call.callee as t.MemberExpression).property,
               ),
-              call.arguments as t.Expression[]
+              call.arguments as t.Expression[],
             );
-          }, arrayExpr),
-          []
-        );
+          }, arrayExpr);
 
         bodyStatements.push(
           t.variableDeclaration("const", [
             t.variableDeclarator(preReduceTemp, preReduceExpr),
-          ])
+          ]),
         );
 
         arrayToReduce = preReduceTemp;
@@ -80,12 +81,12 @@ export const UnchainReduceToLoopTransformer: NodeTransformer<t.VariableDeclarato
       bodyStatements.push(
         t.variableDeclaration("const", [
           t.variableDeclarator(reducerId, reducerFn),
-        ])
+        ]),
       );
 
       // let acc = <init>
       bodyStatements.push(
-        t.variableDeclaration("let", [t.variableDeclarator(acc, initialValue)])
+        t.variableDeclaration("let", [t.variableDeclarator(acc, initialValue)]),
       );
 
       // for (...) acc = reducerFn(acc, array[i])
@@ -96,21 +97,25 @@ export const UnchainReduceToLoopTransformer: NodeTransformer<t.VariableDeclarato
         t.binaryExpression(
           "<",
           i,
-          t.memberExpression(arrayToReduce, t.identifier("length"))
+          t.memberExpression(arrayToReduce, t.identifier("length")),
         ),
         t.updateExpression("++", i),
+        // for (...) acc = reducerFn(acc, array[i], i, array)
         t.blockStatement([
           t.expressionStatement(
             t.assignmentExpression(
               "=",
               t.identifier(acc.name),
+              // Pass (accumulator, element, index, source) to match Array.prototype.reduce
               t.callExpression(reducerId, [
                 t.identifier(acc.name),
                 t.memberExpression(arrayToReduce, i, true),
-              ])
-            )
+                i,
+                arrayToReduce,
+              ]),
+            ),
           ),
-        ])
+        ]),
       );
 
       bodyStatements.push(loop);
@@ -119,12 +124,13 @@ export const UnchainReduceToLoopTransformer: NodeTransformer<t.VariableDeclarato
       let resultExpr: t.Expression = t.identifier(acc.name);
       for (let j = reduceIndex + 1; j < chain.length; j++) {
         const call = chain[j];
+        if (!call) continue; // narrowing for TS
         resultExpr = t.callExpression(
           t.memberExpression(
             resultExpr,
-            (call.callee as t.MemberExpression).property
+            (call.callee as t.MemberExpression).property,
           ),
-          call.arguments as t.Expression[]
+          call.arguments as t.Expression[],
         );
       }
 
@@ -135,7 +141,7 @@ export const UnchainReduceToLoopTransformer: NodeTransformer<t.VariableDeclarato
 
       // result = acc;
       const finalAssign = t.expressionStatement(
-        t.assignmentExpression("=", node.id as t.LVal, resultExpr)
+        t.assignmentExpression("=", node.id as t.LVal, resultExpr),
       );
 
       context.helpers.replaceNode(context.parent!, [

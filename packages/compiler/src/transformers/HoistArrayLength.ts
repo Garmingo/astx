@@ -40,9 +40,9 @@ export const HoistArrayLengthTransformer: NodeTransformer<t.ForStatement> = {
       t.isIdentifier(right.property, { name: "length" }) &&
       t.isIdentifier(right.object);
 
-    // Match: i <= arr.length - 1
+    // Match: i <= arr.length - 1  (equivalent to i < arr.length)
     const isMinusOne =
-      (test.operator === "<=" || test.operator === "<") &&
+      test.operator === "<=" &&
       t.isBinaryExpression(right) &&
       right.operator === "-" &&
       t.isMemberExpression(right.left) &&
@@ -74,21 +74,7 @@ export const HoistArrayLengthTransformer: NodeTransformer<t.ForStatement> = {
       node.test = t.binaryExpression(
         "<",
         test.left,
-        t.identifier("___placeholder")
-      );
-    }
-
-    // Handle: i < arr.length - 1 → normalize to i <= arr.length
-    else if (
-      t.isBinaryExpression(test.right) &&
-      t.isMemberExpression(test.right.left) &&
-      test.operator === "<"
-    ) {
-      arrayId = test.right.left.object as t.Identifier;
-      node.test = t.binaryExpression(
-        "<=",
-        test.left,
-        t.identifier("___placeholder")
+        t.identifier("___placeholder"),
       );
     } else {
       return node; // Shouldn't happen due to test() guard
@@ -107,7 +93,7 @@ export const HoistArrayLengthTransformer: NodeTransformer<t.ForStatement> = {
     const decl = t.variableDeclaration("const", [
       t.variableDeclarator(
         hoistedId,
-        t.memberExpression(arrayId, t.identifier("length"))
+        t.memberExpression(arrayId, t.identifier("length")),
       ),
     ]);
 

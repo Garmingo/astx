@@ -16,6 +16,7 @@
  */
 
 import * as t from "@babel/types";
+import { traverseFast } from "@babel/types";
 import { NodeTransformer } from "./transformers";
 
 export const InlineArrowToFunctionTransformer: NodeTransformer<t.ArrowFunctionExpression> =
@@ -24,7 +25,24 @@ export const InlineArrowToFunctionTransformer: NodeTransformer<t.ArrowFunctionEx
     displayName: "Inline Arrow to Function Expression",
     nodeTypes: ["ArrowFunctionExpression"],
     phases: ["pre"],
-    test: () => true,
+
+    test(node): node is t.ArrowFunctionExpression {
+      if (!t.isArrowFunctionExpression(node)) return false;
+
+      // Skip async/generator arrows – semantics differ if converted naively
+      if (node.async || node.generator) return false;
+
+      // Skip arrows that reference `this` or `arguments`:
+      // converting them to a regular function would change the binding.
+      let usesThis = false;
+      let usesArgs = false;
+      traverseFast(node.body, (n) => {
+        if (t.isThisExpression(n)) usesThis = true;
+        if (t.isIdentifier(n, { name: "arguments" })) usesArgs = true;
+      });
+
+      return !usesThis && !usesArgs;
+    },
 
     transform(node): t.FunctionExpression {
       const body = t.isBlockStatement(node.body)
@@ -36,7 +54,7 @@ export const InlineArrowToFunctionTransformer: NodeTransformer<t.ArrowFunctionEx
         node.params,
         body,
         node.generator ?? false,
-        node.async ?? false
+        node.async ?? false,
       );
     },
   };

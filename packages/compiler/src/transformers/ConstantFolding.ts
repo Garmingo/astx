@@ -46,20 +46,24 @@ export const ConstantFoldingTransformer: NodeTransformer<t.BinaryExpression> = {
     const folded = evaluateBinaryExpression(
       node.operator,
       left.value,
-      right.value
+      right.value,
     );
 
-    if (typeof folded === "number") return t.numericLiteral(folded);
+    // Only fold to a literal when the result is a finite number, a string, or a
+    // boolean.  NaN and ±Infinity are not syntactic numeric literals in JS and
+    // would be mis-emitted as identifiers by @babel/generator.
+    if (typeof folded === "number" && isFinite(folded))
+      return t.numericLiteral(folded);
     if (typeof folded === "string") return t.stringLiteral(folded);
     if (typeof folded === "boolean") return t.booleanLiteral(folded);
 
-    return node; // fallback
+    return node; // fallback – leave the expression as-is
   },
 };
 
 // Helper: Check if it's a literal we can evaluate
 function isLiteral(
-  node: t.Node
+  node: t.Node,
 ): node is t.NumericLiteral | t.StringLiteral | t.BooleanLiteral {
   return (
     t.isNumericLiteral(node) ||
@@ -72,7 +76,7 @@ function isLiteral(
 function evaluateBinaryExpression(
   op: t.BinaryExpression["operator"],
   left: any,
-  right: any
+  right: any,
 ): any {
   switch (op) {
     case "+":

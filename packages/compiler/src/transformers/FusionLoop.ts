@@ -27,12 +27,14 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
   test(node) {
     return (
       t.isVariableDeclarator(node) &&
+      t.isIdentifier(node.id) && // only handle simple Identifier targets
       isFusableChain((node as t.VariableDeclarator).init!)
     );
   },
 
   transform(node, context) {
     if (!node.init || !t.isCallExpression(node.init)) return node;
+    if (!t.isIdentifier(node.id)) return node; // guard: destructuring not supported
 
     const steps: t.CallExpression[] = [];
     let current: t.Expression = node.init;
@@ -48,7 +50,7 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
     const input = current;
     const x = context.helpers.generateUid("x");
     const i = context.helpers.generateUid("i");
-    const resultId = node.id as t.Identifier;
+    const resultId = node.id;
 
     const hoisted: t.VariableDeclaration[] = [];
     let finalExpr: t.Expression = resultId;
@@ -72,23 +74,27 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
       if ((method === "map" || method === "filter") && isFn(argFn)) {
         const fnId = context.helpers.generateUid(`${method}Fn`);
         hoisted.push(
-          t.variableDeclaration("const", [t.variableDeclarator(fnId, argFn)])
+          t.variableDeclaration("const", [t.variableDeclarator(fnId, argFn)]),
         );
 
         if (method === "map") {
-          const mappedVal = t.callExpression(fnId, [currentVal]);
+          // Pass (element, index, source) so index/array params in callbacks work
+          const mappedVal = t.callExpression(fnId, [currentVal, i, input]);
           currentVal = context.helpers.generateUid("mapped");
           transforms.push(
             t.variableDeclaration("const", [
               t.variableDeclarator(currentVal, mappedVal),
-            ])
+            ]),
           );
         } else if (method === "filter") {
           transforms.push(
             t.ifStatement(
-              t.unaryExpression("!", t.callExpression(fnId, [currentVal])),
-              t.continueStatement()
-            )
+              t.unaryExpression(
+                "!",
+                t.callExpression(fnId, [currentVal, i, input]),
+              ),
+              t.continueStatement(),
+            ),
           );
         }
       } else if (method === "reduce" && isFn(argFn)) {
@@ -98,7 +104,7 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
         hoisted.push(
           t.variableDeclaration("const", [
             t.variableDeclarator(reduceFnId, argFn),
-          ])
+          ]),
         );
         break;
       } else {
@@ -106,7 +112,7 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
           if (t.isMemberExpression(s.callee)) {
             return t.callExpression(
               t.memberExpression(prev, s.callee.property),
-              s.arguments as t.Expression[]
+              s.arguments as t.Expression[],
             );
           }
           return prev;
@@ -117,30 +123,31 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
 
     const loopBody: t.Statement[] = [];
     loopBody.push(
-      t.variableDeclaration("let", [
+      t.variableDeclaration("const", [
         t.variableDeclarator(x, t.memberExpression(input, i, true)),
-      ])
+      ]),
     );
 
     loopBody.push(...transforms);
 
     if (reduce && reduceFnId) {
+      // Pass (acc, element, index, source) to match Array.prototype.reduce signature
       loopBody.push(
         t.expressionStatement(
           t.assignmentExpression(
             "=",
             resultId,
-            t.callExpression(reduceFnId, [resultId, currentVal])
-          )
-        )
+            t.callExpression(reduceFnId, [resultId, currentVal, i, input]),
+          ),
+        ),
       );
     } else {
       loopBody.push(
         t.expressionStatement(
           t.callExpression(t.memberExpression(resultId, t.identifier("push")), [
             currentVal,
-          ])
-        )
+          ]),
+        ),
       );
     }
 
@@ -151,10 +158,10 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
       t.binaryExpression(
         "<",
         i,
-        t.memberExpression(input, t.identifier("length"))
+        t.memberExpression(input, t.identifier("length")),
       ),
       t.updateExpression("++", i),
-      t.blockStatement(loopBody)
+      t.blockStatement(loopBody),
     );
 
     const block: t.Statement[] = [];
@@ -168,16 +175,16 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
           resultId,
           reduce && reduceInit
             ? reduceInit
-            : t.newExpression(t.identifier("Array"), [])
-        )
-      )
+            : t.newExpression(t.identifier("Array"), []),
+        ),
+      ),
     );
 
     block.push(loop);
 
     if (!(t.isIdentifier(finalExpr) && finalExpr.name === resultId.name)) {
       block.push(
-        t.expressionStatement(t.assignmentExpression("=", resultId, finalExpr))
+        t.expressionStatement(t.assignmentExpression("=", resultId, finalExpr)),
       );
     }
 
@@ -198,7 +205,7 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
 
     // Declare the result variable (no init yet)
     replacement.push(
-      t.variableDeclaration(kind, [t.variableDeclarator(resultId)])
+      t.variableDeclaration(kind, [t.variableDeclarator(resultId)]),
     );
 
     // The fused computation in a scoped block
@@ -215,7 +222,7 @@ export const FusionLoopTransformer: NodeTransformer<t.VariableDeclarator> = {
 
 function isFn(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  n: any
+  n: any,
 ): n is t.ArrowFunctionExpression | t.FunctionExpression {
   return t.isArrowFunctionExpression(n) || t.isFunctionExpression(n);
 }
@@ -235,5 +242,7 @@ function isFusableChain(expr: t.Expression | null): boolean {
       break;
     }
   }
-  return count >= 1;
+  // Require at least 2 chained operations to be worth fusing;
+  // single map/filter/reduce is handled by the dedicated Unchain transformers.
+  return count >= 2;
 }

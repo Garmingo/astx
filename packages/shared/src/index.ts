@@ -17,6 +17,34 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
+ * Codec abstraction for compression/decompression.
+ * The default Node.js implementation uses the built-in zstd engine.
+ * For browsers, supply a custom codec (e.g. backed by @mongodb-js/zstd WASM
+ * or fzstd for decompression-only scenarios).
+ */
+export interface AstxCodecOptions {
+  /** Zstd compression level (1–22). Default: 22. */
+  level?: number;
+  /**
+   * Pre-trained Zstd dictionary for improved compression ratios.
+   * Train with `zstd --train` on representative .astx output files.
+   * Both compressor and decompressor must use the same dictionary.
+   */
+  dict?: Uint8Array;
+}
+
+export interface AstxCodec {
+  compress(
+    data: Uint8Array,
+    opts?: AstxCodecOptions,
+  ): Uint8Array | Promise<Uint8Array>;
+  decompress(
+    data: Uint8Array,
+    opts?: AstxCodecOptions,
+  ): Uint8Array | Promise<Uint8Array>;
+}
+
+/**
  * The representation of an ASTX compiled program.
  */
 export interface CompiledProgram {
@@ -35,10 +63,22 @@ export interface CompiledProgram {
    * The AST nodes are stored in a custom format.
    */
   bytecode: any[];
+  /**
+   * Optional source map: one [line, col] entry per bytecode slot.
+   * Present only when compiled with { sourceMap: true }.
+   * Null entries denote generated/synthetic nodes.
+   */
+  sourceMap?: ([number, number] | null)[] | null;
 }
 
-export const MAGIC_HEADER = Buffer.from([0xa5, 0x7b, 0x1c, 0x00]);
-export const FORMAT_VERSION = Buffer.from([0x01]);
+export const MAGIC_HEADER = new Uint8Array([0xa5, 0x7b, 0x1c, 0x00]);
+/**
+ * Format version history:
+ *  0x01 – initial format: [expressionDict, valueDict, bytecode] compressed with Brotli
+ *  0x02 – expressionDict eliminated (predefined via PREDEFINED_TYPES), Zstd level-22;
+ *          wire payload: [valueDict, bytecode, sourceMap | null]
+ */
+export const FORMAT_VERSION = new Uint8Array([0x02]);
 
 export const MINIMAL_AST_KEYS: Record<string, string[]> = {
   // Program structure
@@ -158,5 +198,30 @@ export const MINIMAL_AST_KEYS: Record<string, string[]> = {
   Super: [],
   ExportSpecifier: ["local", "exported"],
 };
+
+/**
+ * Fixed, ordered list of all AST node type names derived from MINIMAL_AST_KEYS.
+ * The position in this array is the stable on-disk type index used in format v0x02+.
+ * Both compiler and runtime derive the mapping from this single source of truth,
+ * so the expressionDict no longer needs to be stored in the binary file.
+ */
+export const PREDEFINED_TYPES: string[] = Object.keys(MINIMAL_AST_KEYS);
+
+/**
+ * Inverse lookup: node type name → stable integer index.
+ */
+export const PREDEFINED_TYPE_INDEX: Map<string, number> = new Map(
+  PREDEFINED_TYPES.map((name, idx) => [name, idx]),
+);
+
+/**
+ * Literal node types whose `value` field is stored INLINE in the bytecode
+ * using the native msgpack type rather than as a valueDict index.
+ *
+ * - BooleanLiteral:  stored as msgpack bool  (1 byte each, saves 2 valueDict slots)
+ *
+ * NullLiteral is implicitly handled: MINIMAL_AST_KEYS lists no fields for it.
+ */
+export const INLINE_VALUE_TYPES = new Set<string>(["BooleanLiteral"]);
 
 export * from "./compatability";

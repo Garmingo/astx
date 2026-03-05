@@ -52,7 +52,7 @@ export const UnchainFilterToLoopTransformer: NodeTransformer<t.VariableDeclarato
 
           const fnId = context.helpers.generateUid(`filterFn${i}`);
           hoistedFns.push(
-            t.variableDeclaration("const", [t.variableDeclarator(fnId, fn)])
+            t.variableDeclaration("const", [t.variableDeclarator(fnId, fn)]),
           );
 
           const tmp = context.helpers.generateUid(`tmp${i + 1}`);
@@ -67,16 +67,16 @@ export const UnchainFilterToLoopTransformer: NodeTransformer<t.VariableDeclarato
             t.variableDeclaration("const", [
               t.variableDeclarator(
                 tmp,
-                t.newExpression(t.identifier("Array"), [inputLen])
+                t.newExpression(t.identifier("Array"), [inputLen]),
               ),
-            ])
+            ]),
           );
 
           // let wN = 0;
           statements.push(
             t.variableDeclaration("let", [
               t.variableDeclarator(write, t.numericLiteral(0)),
-            ])
+            ]),
           );
 
           // for (...) { const el = arr[i]; if (filterFn(el)) { tmp[w++] = el; } }
@@ -91,24 +91,37 @@ export const UnchainFilterToLoopTransformer: NodeTransformer<t.VariableDeclarato
                 t.variableDeclaration("const", [
                   t.variableDeclarator(
                     el,
-                    t.memberExpression(prev, index, true)
+                    t.memberExpression(prev, index, true),
                   ),
                 ]),
                 t.ifStatement(
-                  t.callExpression(fnId, [el]), // ✅ use hoisted filterFn
+                  // Pass (element, index, source) to match Array.prototype.filter
+                  t.callExpression(fnId, [el, index, prev]),
                   t.blockStatement([
                     t.expressionStatement(
                       t.assignmentExpression(
                         "=",
                         t.memberExpression(tmp, write, true),
-                        el
-                      )
+                        el,
+                      ),
                     ),
                     t.expressionStatement(t.updateExpression("++", write)),
-                  ])
+                  ]),
                 ),
-              ])
-            )
+              ]),
+            ),
+          );
+
+          // Truncate the over-allocated array to the actual written count:
+          // tmp.length = write;
+          statements.push(
+            t.expressionStatement(
+              t.assignmentExpression(
+                "=",
+                t.memberExpression(tmp, t.identifier("length")),
+                write,
+              ),
+            ),
           );
 
           prev = tmp;
@@ -118,10 +131,10 @@ export const UnchainFilterToLoopTransformer: NodeTransformer<t.VariableDeclarato
           const tmp = context.helpers.generateUid(`tmp${i + 1}`);
           const expr = t.callExpression(
             t.memberExpression(prev, method),
-            callExpr.arguments as t.Expression[]
+            callExpr.arguments as t.Expression[],
           );
           statements.push(
-            t.variableDeclaration("const", [t.variableDeclarator(tmp, expr)])
+            t.variableDeclaration("const", [t.variableDeclarator(tmp, expr)]),
           );
           prev = tmp;
           lastTemp = tmp;
@@ -131,8 +144,8 @@ export const UnchainFilterToLoopTransformer: NodeTransformer<t.VariableDeclarato
       // Assign final result = lastTemp;
       statements.push(
         t.expressionStatement(
-          t.assignmentExpression("=", node.id as t.LVal, lastTemp!)
-        )
+          t.assignmentExpression("=", node.id as t.LVal, lastTemp!),
+        ),
       );
 
       const resultLet = t.variableDeclaration("let", [

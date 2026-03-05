@@ -17,7 +17,31 @@
 
 import * as t from "@babel/types";
 import { NodeTransformer, TransformContext } from "./transformers";
-import { traverseFast } from "@babel/types";
+
+/**
+ * Traverse an AST node, calling `fn` for every visited node.
+ * Stops recursion into `FunctionDeclaration` and `FunctionExpression` bodies
+ * because those create their own `this`/`arguments` bindings.
+ * Arrow functions are NOT treated as boundaries (they inherit lexical this).
+ */
+function scopeAwareTraverse(node: t.Node, fn: (n: t.Node) => void): void {
+  fn(node);
+  // Do not cross into regular function bodies
+  if (t.isFunctionDeclaration(node) || t.isFunctionExpression(node)) return;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const key of Object.keys(node as any)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const val = (node as any)[key];
+    if (Array.isArray(val)) {
+      for (const child of val) {
+        if (child && typeof child === "object" && "type" in child)
+          scopeAwareTraverse(child as t.Node, fn);
+      }
+    } else if (val && typeof val === "object" && "type" in val) {
+      scopeAwareTraverse(val as t.Node, fn);
+    }
+  }
+}
 
 export const AssignedArrowToFunctionTransformer: NodeTransformer<t.VariableDeclaration> =
   {
@@ -29,7 +53,7 @@ export const AssignedArrowToFunctionTransformer: NodeTransformer<t.VariableDecla
     test(node): node is t.VariableDeclaration {
       if (!t.isVariableDeclaration(node)) return false;
       return node.declarations.some((decl) =>
-        t.isArrowFunctionExpression(decl.init)
+        t.isArrowFunctionExpression(decl.init),
       );
     },
 
@@ -48,7 +72,11 @@ export const AssignedArrowToFunctionTransformer: NodeTransformer<t.VariableDecla
         let usesThis = false;
         let usesArgs = false;
 
-        traverseFast(init.body, (n: t.Node) => {
+        // Only scan the arrow's own lexical scope — stop at
+        // FunctionDeclaration/FunctionExpression boundaries so that `this` or
+        // `arguments` used inside a nested regular function are NOT mistakenly
+        // attributed to the outer arrow.
+        scopeAwareTraverse(init.body, (n: t.Node) => {
           if (t.isThisExpression(n)) usesThis = true;
           if (t.isIdentifier(n, { name: "arguments" })) usesArgs = true;
         });
@@ -67,7 +95,7 @@ export const AssignedArrowToFunctionTransformer: NodeTransformer<t.VariableDecla
         const rewrittenBody = rewriteLexicalReferences(
           originalBody,
           thisId,
-          argsId
+          argsId,
         );
 
         const fnExpr = t.functionExpression(
@@ -75,14 +103,14 @@ export const AssignedArrowToFunctionTransformer: NodeTransformer<t.VariableDecla
           init.params,
           rewrittenBody,
           init.generator ?? false,
-          init.async ?? false
+          init.async ?? false,
         );
 
         if (thisId) {
           preHoisted.push(
             t.variableDeclaration("const", [
               t.variableDeclarator(thisId, t.thisExpression()),
-            ])
+            ]),
           );
         }
 
@@ -90,7 +118,7 @@ export const AssignedArrowToFunctionTransformer: NodeTransformer<t.VariableDecla
           preHoisted.push(
             t.variableDeclaration("const", [
               t.variableDeclarator(argsId, t.identifier("arguments")),
-            ])
+            ]),
           );
         }
 
@@ -107,18 +135,35 @@ export const AssignedArrowToFunctionTransformer: NodeTransformer<t.VariableDecla
 function rewriteLexicalReferences(
   block: t.BlockStatement,
   thisId?: t.Identifier,
-  argsId?: t.Identifier
+  argsId?: t.Identifier,
 ): t.BlockStatement {
   const cloned = t.cloneNode(block, true) as t.BlockStatement;
 
-  traverseFast(cloned, (node: t.Node) => {
+  function rewrite(node: t.Node) {
     if (thisId && t.isThisExpression(node)) {
       Object.assign(node, t.identifier(thisId.name));
     }
     if (argsId && t.isIdentifier(node, { name: "arguments" })) {
       Object.assign(node, t.identifier(argsId.name));
     }
-  });
+    // Stop at regular function boundaries: their `this`/`arguments` are
+    // separate and must not be rewritten.
+    if (t.isFunctionDeclaration(node) || t.isFunctionExpression(node)) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const key of Object.keys(node as any)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const val = (node as any)[key];
+      if (Array.isArray(val)) {
+        for (const child of val) {
+          if (child && typeof child === "object" && "type" in child)
+            rewrite(child as t.Node);
+        }
+      } else if (val && typeof val === "object" && "type" in val) {
+        rewrite(val as t.Node);
+      }
+    }
+  }
 
+  rewrite(cloned);
   return cloned;
 }

@@ -18,19 +18,61 @@
 
 import { decode as msgpackDecode } from "@msgpack/msgpack";
 import {
+  AstxCodec,
+  AstxCodecOptions,
   CompiledProgram,
   FORMAT_VERSION,
+  INLINE_VALUE_TYPES,
   MAGIC_HEADER,
   MINIMAL_AST_KEYS,
+  PREDEFINED_TYPES,
   safeESModule,
 } from "@astx/shared";
-import { decompress } from "brotli";
-import { readFileSync } from "fs";
 import { templateElement } from "@babel/types";
-import path from "path";
 
 import { default as _generate } from "@babel/generator";
 const generate = safeESModule(_generate);
+
+// Re-export codec types for callers who use only the runtime
+export type { AstxCodec, AstxCodecOptions };
+
+export interface LoadBufferOptions {
+  /** Custom codec (default: Node.js built-in zstd via node:zlib). */
+  codec?: AstxCodec;
+  /**
+   * Zstd dictionary used during compression – must match the one used in
+   * {@link ToBufferOptions.dict} when the file was created.
+   */
+  dict?: Uint8Array;
+}
+
+/**
+ * Default runtime codec using Node.js built-in zstd.
+ * Throws a helpful error in browser environments.
+ */
+function createDefaultNodeCodec(): AstxCodec {
+  return {
+    async compress() {
+      throw new Error("[ASTX] Runtime codec's compress() is not used.");
+    },
+    async decompress(data: Uint8Array, opts?: AstxCodecOptions) {
+      if (opts?.dict) {
+        throw new Error(
+          "[ASTX] Dictionary decompression requires a custom AstxCodec.",
+        );
+      }
+      const zlib = await import("node:zlib").catch(() => {
+        throw new Error(
+          "[ASTX] node:zlib is not available (browser environment?).\n" +
+            "Provide a custom codec via the `codec` option in loadFromBuffer().",
+        );
+      });
+      return zlib.zstdDecompressSync(
+        data instanceof Buffer ? data : Buffer.from(data),
+      );
+    },
+  };
+}
 
 const RESERVED_WORDS = new Set([
   "abstract",
@@ -113,14 +155,37 @@ function generateShortName(index: number): string {
   return name;
 }
 
-export function loadFromFile(filename: string): CompiledProgram {
-  const file = readFileSync(filename);
-  return loadFromBuffer(file);
+/**
+ * Load a compiled ASTX program from a file (Node.js only).
+ * In browser environments this will throw – use {@link loadFromBuffer} instead.
+ */
+export async function loadFromFile(
+  filename: string,
+  opts?: LoadBufferOptions,
+): Promise<CompiledProgram> {
+  const fs = await import("node:fs/promises").catch(() => {
+    throw new Error(
+      "[ASTX] loadFromFile() requires Node.js (node:fs/promises not available).",
+    );
+  });
+  const buf = await fs.readFile(filename);
+  return loadFromBuffer(new Uint8Array(buf), opts);
 }
 
-export function loadFromBuffer(buffer: Buffer): CompiledProgram {
-  const magic = buffer.subarray(0, 4);
-  const version = buffer[4];
+/**
+ * Decode a compiled ASTX program from a binary buffer.
+ *
+ * Works in Node.js (default codec) and in browsers when a custom `codec` is
+ * supplied.
+ */
+export async function loadFromBuffer(
+  buffer: Uint8Array | Buffer,
+  opts?: LoadBufferOptions,
+): Promise<CompiledProgram> {
+  // Ensure we have a Uint8Array view (Buffer is a subclass in Node.js)
+  const view = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const magic = view.subarray(0, 4);
+  const version = view[4];
 
   if (
     magic[0] !== MAGIC_HEADER[0] ||
@@ -132,19 +197,36 @@ export function loadFromBuffer(buffer: Buffer): CompiledProgram {
   }
   if (version !== FORMAT_VERSION[0]) {
     throw new Error(
-      `Unsupported version: ${version} | Current version: ${FORMAT_VERSION[0]}`
+      `Unsupported version: ${version} | Current version: ${FORMAT_VERSION[0]}`,
     );
   }
 
-  const compressed = buffer.subarray(5);
-  const decoded = msgpackDecode(Buffer.from(decompress(compressed)));
-  const [expressionDict, valueDict, bytecode] = decoded as [
-    string[],
+  const compressed = view.subarray(5);
+  const codec = opts?.codec ?? createDefaultNodeCodec();
+  const decompressed = await codec.decompress(compressed, { dict: opts?.dict });
+  const decompressedBytes =
+    decompressed instanceof Uint8Array
+      ? decompressed
+      : new Uint8Array(decompressed);
+
+  // Wire format v0x02: [valueDict, bytecode, sourceMap | null]
+  const decoded = msgpackDecode(decompressedBytes);
+  const [valueDict, bytecode, sourceMap] = decoded as [
     any[],
     any[],
+    ([number, number] | null)[] | null,
   ];
 
-  return { expressionDict, valueDict, bytecode };
+  // The expressionDict is reconstructed from the shared PREDEFINED_TYPES table;
+  // it is no longer stored in the binary payload.
+  const expressionDict: string[] = PREDEFINED_TYPES.slice();
+
+  return {
+    expressionDict,
+    valueDict,
+    bytecode,
+    sourceMap: sourceMap ?? undefined,
+  };
 }
 
 function decodeToAST(compiled: CompiledProgram): any {
@@ -184,7 +266,12 @@ function decodeToAST(compiled: CompiledProgram): any {
         (type === "Literal" || type.endsWith("Literal")) &&
         key === "value"
       ) {
-        obj.value = valueDict[arg];
+        if (INLINE_VALUE_TYPES.has(type)) {
+          // Value is stored inline as a native msgpack type (e.g. bool)
+          obj[key] = arg;
+        } else {
+          obj[key] = valueDict[arg];
+        }
       } else if (Array.isArray(arg)) {
         obj[key] = arg.map((a) => (typeof a === "number" ? decode(a) : a));
       } else if (typeof arg === "number" && bytecode[arg]) {
@@ -241,7 +328,7 @@ export function run(compiled: CompiledProgram, options: RunOptions = {}) {
 
   if (mode !== "vm" && !context.require && !options.skipDefaultInjects) {
     console.warn(
-      "[ASTX Runtime] Warning: 'require' seems not to be available in the current environment."
+      "[ASTX Runtime] Warning: 'require' seems not to be available in the current environment.",
     );
   }
 
@@ -270,21 +357,27 @@ export function run(compiled: CompiledProgram, options: RunOptions = {}) {
 
     const directory = inject.__dirname ?? process.cwd();
     const scopedRequire = (modulePath: string) => {
-      if (path.isAbsolute(modulePath) || !modulePath.startsWith(".")) {
+      if (!modulePath.startsWith(".")) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         return require(modulePath); // absolute path or bare module
       }
-
-      const resolved = path.resolve(directory, modulePath); // relative
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require(resolved);
+      // For relative paths, resolve using built-in path (dynamic import avoids
+      // bundling node:path into browser builds since vm mode is Node-only).
+      return import("node:path").then((pathMod) => {
+        const resolved = pathMod.resolve(directory, modulePath);
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        return require(resolved);
+      });
     };
 
     return (async () => {
-      const { default: vm } = await import("vm"); // 👈 dynamic import
+      const [{ default: vm }, pathMod] = await Promise.all([
+        import("vm"),
+        import("node:path"),
+      ]);
       const vmContext = vm.createContext({
         __dirname: directory,
-        __filename: path.join(directory, "index.js"), // default filename
+        __filename: pathMod.join(directory, "index.js"),
         ...context,
         require: scopedRequire,
       });

@@ -56,7 +56,7 @@ export const UnchainMapToLoopTransformer: NodeTransformer<t.VariableDeclarator> 
           hoistedFns.push(
             t.variableDeclaration("const", [
               t.variableDeclarator(fnId, originalFn),
-            ])
+            ]),
           );
 
           // Create: const tmpN = new Array(prev.length)
@@ -64,14 +64,17 @@ export const UnchainMapToLoopTransformer: NodeTransformer<t.VariableDeclarator> 
             t.variableDeclaration("const", [
               t.variableDeclarator(
                 tmp,
-                t.newExpression(t.identifier("Array"), [inputLen])
+                t.newExpression(t.identifier("Array"), [inputLen]),
               ),
-            ])
+            ]),
           );
 
-          // Call: tmp[i] = mapFn(input[i])
+          // Call: tmp[i] = mapFn(input[i], i, input)
+          // Pass (element, index, source) to match Array.prototype.map signature
           const mapCall = t.callExpression(fnId, [
             t.memberExpression(prev, index, true),
+            index,
+            prev,
           ]);
 
           statements.push(
@@ -86,11 +89,11 @@ export const UnchainMapToLoopTransformer: NodeTransformer<t.VariableDeclarator> 
                   t.assignmentExpression(
                     "=",
                     t.memberExpression(tmp, index, true),
-                    mapCall
-                  )
+                    mapCall,
+                  ),
                 ),
-              ])
-            )
+              ]),
+            ),
           );
 
           prev = tmp;
@@ -100,13 +103,13 @@ export const UnchainMapToLoopTransformer: NodeTransformer<t.VariableDeclarator> 
           const tmp = context.helpers.generateUid(`tmp${i + 1}`);
           const replaced = t.callExpression(
             t.memberExpression(prev, method),
-            callExpr.arguments as t.Expression[]
+            callExpr.arguments as t.Expression[],
           );
 
           statements.push(
             t.variableDeclaration("const", [
               t.variableDeclarator(tmp, replaced),
-            ])
+            ]),
           );
 
           prev = tmp;
@@ -117,8 +120,8 @@ export const UnchainMapToLoopTransformer: NodeTransformer<t.VariableDeclarator> 
       // Final assignment
       statements.push(
         t.expressionStatement(
-          t.assignmentExpression("=", node.id as t.LVal, lastTemp!)
-        )
+          t.assignmentExpression("=", node.id as t.LVal, lastTemp!),
+        ),
       );
 
       const resultLet = t.variableDeclaration("let", [

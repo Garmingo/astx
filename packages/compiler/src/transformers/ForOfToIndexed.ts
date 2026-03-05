@@ -36,16 +36,29 @@ export const ForOfToIndexedTransformer: NodeTransformer<t.ForOfStatement> = {
   transform(node, context: TransformContext): t.Statement {
     const arrayId = node.right as t.Identifier;
     const indexId = context.helpers.generateUid("i");
+    // Hoist the array length before the loop so mutations inside the body
+    // (e.g. push/pop on the same array) don't change the iteration count –
+    // this matches the semantics of for...of which captures the iterator upfront.
+    const lenId = context.helpers.generateUid("len");
+    context.helpers.insertBefore(
+      t.variableDeclaration("const", [
+        t.variableDeclarator(
+          lenId,
+          t.memberExpression(arrayId, t.identifier("length")),
+        ),
+      ]),
+    );
 
     const itemBinding = t.isVariableDeclaration(node.left)
-      ? (node.left.declarations[0]?.id as t.Identifier)
+      ? (node.left.declarations[0]?.id as t.LVal)
       : (node.left as t.Identifier);
 
     const arrayAccess = t.memberExpression(arrayId, indexId, true);
 
-    const valueDecl = t.variableDeclaration("const", [
-      t.variableDeclarator(itemBinding, arrayAccess),
-    ]);
+    const valueDecl = t.variableDeclaration(
+      t.isVariableDeclaration(node.left) ? node.left.kind : "const",
+      [t.variableDeclarator(itemBinding, arrayAccess)],
+    );
 
     const newBody = t.isBlockStatement(node.body)
       ? t.blockStatement([valueDecl, ...node.body.body])
@@ -55,13 +68,9 @@ export const ForOfToIndexedTransformer: NodeTransformer<t.ForOfStatement> = {
       t.variableDeclaration("let", [
         t.variableDeclarator(indexId, t.numericLiteral(0)),
       ]),
-      t.binaryExpression(
-        "<",
-        indexId,
-        t.memberExpression(arrayId, t.identifier("length"))
-      ),
+      t.binaryExpression("<", indexId, lenId),
       t.updateExpression("++", indexId),
-      newBody
+      newBody,
     );
   },
 };

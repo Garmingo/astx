@@ -41,7 +41,7 @@ export const ForEachToForTransformer: NodeTransformer<t.CallExpression> = {
       | t.FunctionExpression
       | t.ArrowFunctionExpression;
 
-    const [itemParamRaw, indexParamRaw] = callback.params;
+    const [itemParamRaw, indexParamRaw, arrayParamRaw] = callback.params;
 
     // Generate safe unique identifiers
     const indexId =
@@ -51,9 +51,20 @@ export const ForEachToForTransformer: NodeTransformer<t.CallExpression> = {
 
     // Hoist the array expression into a temporary to avoid re-evaluating it
     const arrayId = context.helpers.generateUid("arr");
+    // Hoist the array length so mutations inside the loop don't affect iteration
+    const lenId = context.helpers.generateUid("len");
     // Insert: const <arrayId> = <array>;
     context.helpers.insertBefore(
-      t.variableDeclaration("const", [t.variableDeclarator(arrayId, array)])
+      t.variableDeclaration("const", [t.variableDeclarator(arrayId, array)]),
+    );
+    // Insert: const <lenId> = <arrayId>.length;
+    context.helpers.insertBefore(
+      t.variableDeclaration("const", [
+        t.variableDeclarator(
+          lenId,
+          t.memberExpression(arrayId, t.identifier("length")),
+        ),
+      ]),
     );
 
     // Construct loop body: create item binding (supports destructuring patterns)
@@ -66,9 +77,9 @@ export const ForEachToForTransformer: NodeTransformer<t.CallExpression> = {
           t.variableDeclaration("const", [
             t.variableDeclarator(
               itemParamRaw,
-              t.memberExpression(arrayId, indexId, true)
+              t.memberExpression(arrayId, indexId, true),
             ),
-          ])
+          ]),
         );
       } else if (t.isPattern(itemParamRaw)) {
         // const [a,b] = arr[index]; or const {x} = arr[index];
@@ -76,9 +87,9 @@ export const ForEachToForTransformer: NodeTransformer<t.CallExpression> = {
           t.variableDeclaration("const", [
             t.variableDeclarator(
               itemParamRaw as t.LVal,
-              t.memberExpression(arrayId, indexId, true)
+              t.memberExpression(arrayId, indexId, true),
             ),
-          ])
+          ]),
         );
       } else {
         // Fallback: assign to generated item identifier
@@ -87,9 +98,9 @@ export const ForEachToForTransformer: NodeTransformer<t.CallExpression> = {
           t.variableDeclaration("const", [
             t.variableDeclarator(
               itemId,
-              t.memberExpression(arrayId, indexId, true)
+              t.memberExpression(arrayId, indexId, true),
             ),
-          ])
+          ]),
         );
       }
     } else {
@@ -99,9 +110,18 @@ export const ForEachToForTransformer: NodeTransformer<t.CallExpression> = {
         t.variableDeclaration("const", [
           t.variableDeclarator(
             itemId,
-            t.memberExpression(arrayId, indexId, true)
+            t.memberExpression(arrayId, indexId, true),
           ),
-        ])
+        ]),
+      );
+    }
+
+    // If the callback uses the third parameter (the array itself), bind it
+    if (arrayParamRaw && t.isIdentifier(arrayParamRaw)) {
+      loopBodyStatements.push(
+        t.variableDeclaration("const", [
+          t.variableDeclarator(arrayParamRaw, arrayId),
+        ]),
       );
     }
 
@@ -115,13 +135,9 @@ export const ForEachToForTransformer: NodeTransformer<t.CallExpression> = {
       t.variableDeclaration("let", [
         t.variableDeclarator(indexId, t.numericLiteral(0)),
       ]),
-      t.binaryExpression(
-        "<",
-        indexId,
-        t.memberExpression(arrayId, t.identifier("length"))
-      ),
+      t.binaryExpression("<", indexId, lenId),
       t.updateExpression("++", indexId),
-      t.blockStatement(loopBodyStatements)
+      t.blockStatement(loopBodyStatements),
     );
 
     return loop;

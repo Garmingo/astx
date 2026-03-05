@@ -38,14 +38,17 @@ export const PowToMultiplyTransformer: NodeTransformer<t.CallExpression> = {
     );
   },
 
-  transform(node, context: TransformContext): t.Expression {
+  transform(node, _context: TransformContext): t.Expression {
     const base = node.arguments[0] as t.Expression;
     const exponent = (node.arguments[1] as t.NumericLiteral).value;
 
-    // Expand: x * x * x * ...
-    let expr: t.Expression = base;
+    // Clone the base for every operand so that each position in the resulting
+    // expression tree holds an independent node object.  A single shared node
+    // reference causes problems during Babel traversal (a path can only appear
+    // once in the tree) and with @babel/generator de-duplication.
+    let expr: t.Expression = t.cloneNode(base, true);
     for (let i = 1; i < exponent; i++) {
-      expr = t.binaryExpression("*", expr, base);
+      expr = t.binaryExpression("*", expr, t.cloneNode(base, true));
     }
 
     return expr;
