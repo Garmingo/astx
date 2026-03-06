@@ -77,13 +77,25 @@ export function babelToEstree(node: any): any {
   // Babel uses ObjectProperty/ObjectMethod; ESTree uses Property.
 
   if (type === "ObjectProperty") {
+    const key = babelToEstree(node.key);
+    const value = babelToEstree(node.value);
+    // After ASTX identifier renaming, key.name and value.name can diverge
+    // (e.g. shorthand `{ x }` becomes key="x", value="a" after renaming x→a).
+    // astring blindly honours shorthand:true and emits just the value → `{ a }`
+    // instead of `{ x: a }`, making the property name wrong at runtime.
+    // Only keep shorthand when key and value are truly the same identifier.
+    const isActuallyShorthand =
+      (node.shorthand ?? false) &&
+      key?.type === "Identifier" &&
+      value?.type === "Identifier" &&
+      key.name === value.name;
     return {
       type: "Property",
-      key: babelToEstree(node.key),
-      value: babelToEstree(node.value),
+      key,
+      value,
       kind: "init",
       method: false,
-      shorthand: node.shorthand ?? false,
+      shorthand: isActuallyShorthand,
       computed: node.computed ?? false,
     };
   }

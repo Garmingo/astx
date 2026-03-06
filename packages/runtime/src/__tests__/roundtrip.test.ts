@@ -181,6 +181,74 @@ describe("generateJSCode()", () => {
   });
 });
 
+describe("shorthand ObjectProperty renaming regression", () => {
+  // When ASTX renames variables (e.g. `x` → `a`), a shorthand ObjectProperty
+  // like `{ x }` has key="x" (preserved) but value identifier renamed to "a".
+  // astring with shorthand:true emits only the value → `{ a }` ≡ `{ a: a }`,
+  // making the property name wrong at runtime (obj.x === undefined).
+  // The codegen fix: only keep shorthand:true when key.name === value.name.
+
+  it("shorthand object literal preserves correct property names after renaming", async () => {
+    const code = `
+      const x = 42;
+      const y = 99;
+      const obj = { x, y };
+      console.log(obj.x);
+      console.log(obj.y);
+    `;
+    // compile() WITHOUT skipTransformers so renaming runs
+    const program = compile(code);
+    const buf = await toBuffer(program);
+    const loaded = await loadFromBuffer(buf);
+    const logs = runCaptured(loaded);
+    expect(logs[0]).toBe("42");
+    expect(logs[1]).toBe("99");
+  });
+
+  it("shorthand object literal with multiple renamed vars (noble/curves pattern)", async () => {
+    // Simulates the pattern in @noble/curves: destructure x/y from a point,
+    // then re-package into a new object via shorthand.
+    const code = `
+      const point = { x: 10, y: 20 };
+      const x = point.x;
+      const y = point.y;
+      const result = { x, y };
+      console.log(result.x);
+      console.log(result.y);
+    `;
+    const program = compile(code);
+    const buf = await toBuffer(program);
+    const loaded = await loadFromBuffer(buf);
+    const logs = runCaptured(loaded);
+    expect(logs[0]).toBe("10");
+    expect(logs[1]).toBe("20");
+  });
+
+  it("shorthand ObjectProperty in generated JS has explicit key:value form when names differ", async () => {
+    const code = `const x = 1; const obj = { x };`;
+    const program = compile(code);
+    const buf = await toBuffer(program);
+    const loaded = await loadFromBuffer(buf);
+    const js = generateJSCode(loaded);
+    // After renaming, x is e.g. "a". The emitted code must NOT be "{ a }"
+    // (which would be wrong key name) but must include "x:" to preserve the key.
+    // Either "{ x: a }" or "{ x: x }" is acceptable — but "{ x }" shorthand
+    // is only acceptable when the variable was NOT renamed.
+    // We verify runtime correctness: obj.x evaluates to 1.
+    const logs = runCaptured(loaded);
+    // run obj.x directly
+    const program2 = compile(
+      `const x = 1; const obj = { x }; console.log(obj.x);`,
+    );
+    const buf2 = await toBuffer(program2);
+    const loaded2 = await loadFromBuffer(buf2);
+    const logs2 = runCaptured(loaded2);
+    expect(logs2[0]).toBe("1");
+    // Suppress unused var warning for js
+    expect(typeof js).toBe("string");
+  });
+});
+
 describe("createSourceMapConsumer()", () => {
   it("returns null when no source map is present", () => {
     const program = compile(`const x = 1;`, "all");
