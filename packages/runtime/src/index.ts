@@ -324,17 +324,6 @@ export function run(compiled: CompiledProgram, options: RunOptions = {}) {
       import: (path: string) => import(path), // dynamic import for ESM
       process: process,
       console: console,
-      // `exports` in a CommonJS module scope refers to module.exports, NOT the
-      // FiveM resource-exports proxy. Code compiled from environments that rely
-      // on `exports['resource-name']` (e.g. ESX via exports['es_extended'])
-      // needs the globalThis version, which IS the FiveM proxy.
-      exports:
-        typeof globalThis !== "undefined" &&
-        (globalThis as Record<string, unknown>).exports !== undefined
-          ? (globalThis as Record<string, unknown>).exports
-          : typeof exports !== "undefined"
-            ? exports
-            : undefined,
     };
 
     context = { ...defaultInjects };
@@ -349,15 +338,20 @@ export function run(compiled: CompiledProgram, options: RunOptions = {}) {
   }
 
   if (mode === "eval") {
-    // ✅ Simple eval, runs in current scope
-    Object.assign(globalThis, context); // inject into global if needed
-    // Shadow the module-scope `exports` (CommonJS module.exports of the ASTX
-    // runtime itself) with the injected one — typically FiveM's resource exports
-    // proxy — so user code that does `exports['resource-name']` resolves correctly.
-    // eslint-disable-next-line no-eval, @typescript-eslint/no-shadow
-    const exports = context.exports; // visible to eval() below
-    void exports; // suppress unused-variable lint
-    return eval(code);
+    // Use indirect eval `(0, eval)(code)` instead of direct `eval(code)`.
+    //
+    // Direct eval runs in the *local* CJS module scope of the ASTX runtime
+    // bundle (bridge.js), where `exports` is bridge.js's own module.exports —
+    // NOT the FiveM resource-exports proxy.
+    //
+    // Indirect eval runs in the *global* scope, so free variables like
+    // `exports`, `emit`, `on`, `onNet`, `emitNet`, etc. resolve from
+    // globalThis — exactly as they do when FiveM loads a script natively.
+    // Any injected context is merged into globalThis first so it is also
+    // visible in the global scope.
+    Object.assign(globalThis, context);
+    // eslint-disable-next-line no-eval
+    return (0, eval)(code);
   }
 
   if (mode === "scoped") {
