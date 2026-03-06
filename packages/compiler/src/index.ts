@@ -48,6 +48,9 @@ import { UnchainReduceToLoopTransformer } from "./transformers/UnchainReduceToLo
 import { FusionLoopTransformer } from "./transformers/FusionLoop";
 import { RestoreExportedNamesTransformer } from "./transformers/RestoreExportedNames";
 import { TreeShakingTransformer } from "./transformers/TreeShaking";
+import { InlineConstantVariablesTransformer } from "./transformers/InlineConstantVariables";
+import { RedundantReturnEliminationTransformer } from "./transformers/RedundantReturnElimination";
+import { ConsecutiveVarMergingTransformer } from "./transformers/ConsecutiveVarMerging";
 
 // Re-export AstxCodec so callers don't need to import from @astx/shared directly
 export type { AstxCodec };
@@ -169,12 +172,15 @@ function createDefaultNodeCodec(): AstxCodec {
 // ─── Variable collection ─────────────────────────────────────────────────────
 
 const TRANSFORMERS: NodeTransformer<any>[] = [
+  // Pre-pass: remove unused code and inline literals before loop transforms.
   TreeShakingTransformer,
-  ForEachToForTransformer,
+  InlineConstantVariablesTransformer,
+  // Main structural transforms.
   ConstantFoldingTransformer,
   DeadCodeEliminationTransformer,
-  PowToMultiplyTransformer,
   LogicalSimplificationTransformer,
+  PowToMultiplyTransformer,
+  ForEachToForTransformer,
   HoistArrayLengthTransformer,
   ForOfToIndexedTransformer,
   InlineArrowToFunctionTransformer,
@@ -183,6 +189,9 @@ const TRANSFORMERS: NodeTransformer<any>[] = [
   UnchainFilterToLoopTransformer,
   UnchainReduceToLoopTransformer,
   FusionLoopTransformer,
+  // Post-pass: clean up after structural transforms.
+  RedundantReturnEliminationTransformer,
+  ConsecutiveVarMergingTransformer,
   RestoreExportedNamesTransformer,
 ];
 
@@ -299,11 +308,14 @@ export function compile(
     // semantics, and retains the lightweight, purely-syntactic transforms.
     const functionalTransformers = [
       "tree-shaking",
-      "restore-exported-names",
+      "inline-constant-variables",
       "constant-folding",
       "dead-code-elimination",
       "logical-simplification",
       "pow-to-multiply",
+      "redundant-return-elimination",
+      "consecutive-var-merging",
+      "restore-exported-names",
     ];
 
     skipTransformers = TRANSFORMERS.filter(

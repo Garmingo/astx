@@ -111,30 +111,41 @@ const bytes = await toBuffer(program, {
 
 ## AST Transformers
 
-The compiler runs these optimisation passes automatically before encoding:
+The compiler runs these optimisation passes automatically before encoding, in the order shown:
 
-| Transformer | What it does |
-|---|---|
-| `TreeShaking` | Removes unused top-level function, class, and side-effect-free variable declarations |
-| `ConstantFolding` | Evaluates constant expressions at compile time (`2 + 3` → `5`) |
-| `DeadCodeElimination` | Removes unreachable code after `return`/`throw`/`break`/`continue` |
-| `LogicalSimplification` | Simplifies `!!x`, `x === true`, `x === false`, etc. |
-| `PowToMultiply` | Replaces `x ** 2` / `x ** 3` with equivalent multiplications |
-| `ForEachToForLoop` | Converts `.forEach(cb)` to a `for` loop |
-| `ForOfToIndexed` | Converts `for…of` over arrays to index-based `for` loops |
-| `FusionLoop` | Merges consecutive loops over the same array |
-| `HoistArrayLength` | Caches `arr.length` outside the loop condition |
-| `UnchainMapToLoop` | Converts `.map(fn)` chains to `for` loops |
-| `UnchainFilterToLoop` | Converts `.filter(fn)` chains to `for` loops |
-| `UnchainReduceToLoop` | Converts `.reduce(fn)` chains to `for` loops |
-| `AssignedArrowToFunction` | Converts assigned arrow functions to regular `function` expressions (scope-aware) |
-| `InlineArrowToFunction` | Converts inline arrow callbacks to `function` expressions where safe |
-| `RestoreExportedNames` | Preserves original names for exported bindings after renaming passes |
+| # | Transformer | What it does |
+|---|---|---|
+| 1 | `TreeShaking` | Removes unused top-level function, class, and side-effect-free variable declarations |
+| 2 | `InlineConstantVariables` | Replaces every reference to a `const` primitive literal with the literal itself, then removes the declaration |
+| 3 | `ConstantFolding` | Evaluates constant expressions at compile time (`2 + 3` → `5`) |
+| 4 | `DeadCodeElimination` | Removes unreachable code after `return`/`throw`/`break`/`continue` |
+| 5 | `LogicalSimplification` | Simplifies `!!x`, `x === true`, `x === false`, etc. |
+| 6 | `PowToMultiply` | Replaces `x ** 2` / `x ** 3` with equivalent multiplications |
+| 7 | `ForEachToForLoop` | Converts `.forEach(cb)` to a `for` loop |
+| 8 | `HoistArrayLength` | Caches `arr.length` outside the loop condition |
+| 9 | `ForOfToIndexed` | Converts `for…of` over arrays to index-based `for` loops |
+| 10 | `InlineArrowToFunction` | Converts inline arrow callbacks to `function` expressions where safe |
+| 11 | `AssignedArrowToFunction` | Converts assigned arrow functions to regular `function` expressions (scope-aware) |
+| 12 | `UnchainMapToLoop` | Converts `.map(fn)` chains to `for` loops |
+| 13 | `UnchainFilterToLoop` | Converts `.filter(fn)` chains to `for` loops |
+| 14 | `UnchainReduceToLoop` | Converts `.reduce(fn)` chains to `for` loops |
+| 15 | `FusionLoop` | Merges consecutive loops over the same array |
+| 16 | `RedundantReturnElimination` | Removes trailing `return;` / `return void 0;` from the end of function bodies |
+| 17 | `ConsecutiveVarMerging` | Merges consecutive `const`/`let`/`var` declarations of the same kind into one (`const a = 1; const b = 2;` → `const a = 1, b = 2;`) |
+| 18 | `RestoreExportedNames` | Preserves original names for exported bindings after renaming passes |
+
+`InlineConstantVariables` (pass 2) feeds directly into `ConstantFolding` (pass 3): after literals are inlined, the folding pass collapses any resulting constant expressions in the same compilation run.
 
 To disable individual transformers:
 
 ```ts
 const program = compile(source, ["FusionLoop", "PowToMultiply"]);
+```
+
+The `"keep-functional"` preset keeps only the lightweight, purely-syntactic passes (passes 1–6, 16–18) and skips the loop-rewriting transformers:
+
+```ts
+const program = compile(source, "keep-functional");
 ```
 
 ---
