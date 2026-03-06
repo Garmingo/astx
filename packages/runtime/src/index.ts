@@ -26,12 +26,8 @@ import {
   MAGIC_HEADER,
   MINIMAL_AST_KEYS,
   PREDEFINED_TYPES,
-  safeESModule,
 } from "@astx/shared";
-import { templateElement } from "@babel/types";
-
-import { default as _generate } from "@babel/generator";
-const generate = safeESModule(_generate);
+import { generateCode } from "./codegen.js";
 
 // Re-export codec types for callers who use only the runtime
 export type { AstxCodec, AstxCodecOptions, CompiledProgram };
@@ -241,9 +237,12 @@ function decodeToAST(compiled: CompiledProgram): any {
     let obj: any;
     if (type === "TemplateElement") {
       const [valueArg, tailArg] = args;
-      obj = templateElement(valueDict[valueArg], tailArg);
-      obj.type = "TemplateElement";
-      return obj;
+      const val = valueDict[valueArg];
+      return {
+        type: "TemplateElement",
+        value: { raw: val?.raw ?? "", cooked: val?.cooked ?? "" },
+        tail: tailArg,
+      };
     } else {
       obj = { type };
     }
@@ -289,8 +288,7 @@ function decodeToAST(compiled: CompiledProgram): any {
 
 export function generateJSCode(compiled: CompiledProgram): string {
   const ast = decodeToAST(compiled);
-  const { code } = generate(ast);
-  return code;
+  return generateCode(ast);
 }
 
 type RunMode = "eval" | "scoped" | "vm";
