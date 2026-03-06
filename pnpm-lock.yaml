@@ -159,8 +159,8 @@ importers:
         version: 1.9.0
     devDependencies:
       '@astx/compiler':
-        specifier: ^2.4.3
-        version: 2.4.3
+        specifier: workspace:*
+        version: link:../compiler
       '@repo/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
@@ -213,12 +213,6 @@ importers:
   packages/typescript-config: {}
 
 packages:
-
-  '@astx/compiler@2.4.3':
-    resolution: {integrity: sha512-iOIF8c509ASOUxHlWPWcUwB/dZ7mNkhdNtEztsQ3zy/ylRUqsi5RzDTOKR6SC+QpqeZ5CBTTvFsuIuuojmFxTQ==}
-
-  '@astx/shared@1.1.1':
-    resolution: {integrity: sha512-ejp871sU7JE0o3Hc2w3qQcb5XxLsFHBYkE23jmtvDm7TU0zj4VeDwaprPSO/an+oP5eSW6PchiNzhILc1YtYEQ==}
 
   '@babel/code-frame@7.27.1':
     resolution: {integrity: sha512-cjQ7ZlQ0Mv3b47hABuTevyTuYN4i+loJKGeV9flcCgIK37cCXRh+L1bd3iBHlynerhQ7BhCkn2BPbQUL+rGqFg==}
@@ -1050,9 +1044,6 @@ packages:
   braces@3.0.3:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
-
-  brotli@1.3.3:
-    resolution: {integrity: sha512-oTKjJdShmDuGW94SyyaoQvAjf30dZaHnjJ8uAF+u2/vGJkJbJPJAT1gDiOJP5v1Zb6f9KEyW/1HpuaWIXtGHPg==}
 
   buffer@5.7.1:
     resolution: {integrity: sha512-EHcyIPBQ4BSGlvjB16k5KgAJ27CIsHY/2JBmCRReo48y9rQ3MaUzWX3KVlBa4U7MyX02HdVj0K7C3WaB3ju7FQ==}
@@ -2596,19 +2587,6 @@ packages:
 
 snapshots:
 
-  '@astx/compiler@2.4.3':
-    dependencies:
-      '@astx/shared': 1.1.1
-      '@babel/parser': 7.28.4
-      '@babel/traverse': 7.28.4
-      '@babel/types': 7.28.4
-      '@msgpack/msgpack': 3.1.2
-      brotli: 1.3.3
-    transitivePeerDependencies:
-      - supports-color
-
-  '@astx/shared@1.1.1': {}
-
   '@babel/code-frame@7.27.1':
     dependencies:
       '@babel/helper-validator-identifier': 7.27.1
@@ -3311,10 +3289,6 @@ snapshots:
   braces@3.0.3:
     dependencies:
       fill-range: 7.1.1
-
-  brotli@1.3.3:
-    dependencies:
-      base64-js: 1.5.1
 
   buffer@5.7.1:
     dependencies:
