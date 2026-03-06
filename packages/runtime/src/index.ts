@@ -63,8 +63,13 @@ function createDefaultNodeCodec(): AstxCodec {
             "Provide a custom codec via the `codec` option in loadFromBuffer().",
         );
       });
-      return zlib.zstdDecompressSync(
-        data instanceof Buffer ? data : Buffer.from(data),
+      const input =
+        data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+      const result = zlib.zstdDecompressSync(input);
+      return new Uint8Array(
+        result.buffer,
+        result.byteOffset,
+        result.byteLength,
       );
     },
   };
@@ -175,11 +180,13 @@ export async function loadFromFile(
  * supplied.
  */
 export async function loadFromBuffer(
-  buffer: Uint8Array | Buffer,
+  buffer: Uint8Array,
   opts?: LoadBufferOptions,
 ): Promise<CompiledProgram> {
-  // Ensure we have a Uint8Array view (Buffer is a subclass in Node.js)
-  const view = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const view =
+    buffer instanceof Uint8Array
+      ? buffer
+      : new Uint8Array(buffer as ArrayBuffer);
   const magic = view.subarray(0, 4);
   const version = view[4];
 
