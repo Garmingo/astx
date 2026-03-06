@@ -19,7 +19,7 @@
   },
   "license": "GPL-3.0-only",
   "devDependencies": {
-    "@astx/compiler": "^2.4.3",
+    "@astx/compiler": "workspace:*",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^24.4.0",
