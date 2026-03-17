@@ -216,6 +216,19 @@ export const MINIMAL_AST_KEYS: Record<string, string[]> = {
 
   // Miscellaneous
   InterpreterDirective: ["value"],
+
+  // Private class members
+  ClassPrivateProperty: ["key", "value", "static"],
+  ClassPrivateMethod: [
+    "kind",
+    "key",
+    "params",
+    "body",
+    "static",
+    "generator",
+    "async",
+  ],
+  PrivateName: ["id"],
 };
 
 /**
