@@ -153,6 +153,45 @@ export function babelToEstree(node: any): any {
     };
   }
 
+  // Babel ClassPrivateMethod → ESTree MethodDefinition (key becomes PrivateIdentifier)
+  if (type === "ClassPrivateMethod") {
+    return {
+      type: "MethodDefinition",
+      key: babelToEstree(node.key),
+      value: {
+        type: "FunctionExpression",
+        id: null,
+        params: (node.params ?? []).map(babelToEstree),
+        body: babelToEstree(node.body),
+        generator: node.generator ?? false,
+        async: node.async ?? false,
+        expression: false,
+      },
+      kind: node.kind ?? "method",
+      static: node.static ?? false,
+      computed: false,
+    };
+  }
+
+  // Babel ClassPrivateProperty → ESTree PropertyDefinition (key becomes PrivateIdentifier)
+  if (type === "ClassPrivateProperty") {
+    return {
+      type: "PropertyDefinition",
+      key: babelToEstree(node.key),
+      value: node.value ? babelToEstree(node.value) : null,
+      static: node.static ?? false,
+      computed: false,
+    };
+  }
+
+  // Babel PrivateName { id: Identifier { name } } → ESTree PrivateIdentifier { name }
+  if (type === "PrivateName") {
+    return {
+      type: "PrivateIdentifier",
+      name: node.id.name,
+    };
+  }
+
   // ── Optional chaining ──────────────────────────────────────────────────────
   // Babel uses OptionalMemberExpression/OptionalCallExpression.
   // ESTree (ES2020) wraps optional chains in ChainExpression.
