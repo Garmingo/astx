@@ -192,6 +192,14 @@ export function babelToEstree(node: any): any {
     };
   }
 
+  // Babel StaticBlock → ESTree StaticBlock
+  if (type === "StaticBlock") {
+    return {
+      type: "StaticBlock",
+      body: (node.body ?? []).map(babelToEstree),
+    };
+  }
+
   // ── Optional chaining ──────────────────────────────────────────────────────
   // Babel uses OptionalMemberExpression/OptionalCallExpression.
   // ESTree (ES2020) wraps optional chains in ChainExpression.

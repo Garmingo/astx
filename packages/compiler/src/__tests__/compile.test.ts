@@ -83,4 +83,14 @@ describe("compile()", () => {
     expect(program.valueDict).not.toContain(true);
     expect(program.valueDict).not.toContain(false);
   });
+
+  it("handles class static initialization blocks", () => {
+    const code = `
+      class Foo {
+        static x;
+        static { Foo.x = 42; }
+      }
+    `;
+    expect(() => compile(code, "all")).not.toThrow();
+  });
 });
