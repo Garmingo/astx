@@ -1,6 +1,6 @@
 {
   "name": "@astx/shared",
-  "version": "3.1.2",
+  "version": "3.1.3",
   "description": "Shared code for the ASTX compiler and runtime",
   "files": [
     "dist"
