@@ -119,7 +119,7 @@ The compiler runs these optimisation passes automatically before encoding, in th
 | 2 | `InlineConstantVariables` | Replaces every reference to a `const` primitive literal with the literal itself, then removes the declaration |
 | 3 | `ConstantFolding` | Evaluates constant expressions at compile time (`2 + 3` → `5`) |
 | 4 | `DeadCodeElimination` | Removes unreachable code after `return`/`throw`/`break`/`continue` |
-| 5 | `LogicalSimplification` | Simplifies `!!x`, `x === true`, `x === false`, etc. |
+| 5 | `LogicalSimplification` | Folds `!true` / `!false` to boolean literals. Does not strip `!!x` (that would change the runtime type). |
 | 6 | `PowToMultiply` | Replaces `x ** 2` / `x ** 3` with equivalent multiplications |
 | 7 | `ForEachToForLoop` | Converts `.forEach(cb)` to a `for` loop |
 | 8 | `HoistArrayLength` | Caches `arr.length` outside the loop condition |

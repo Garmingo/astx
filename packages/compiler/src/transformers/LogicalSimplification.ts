@@ -19,87 +19,25 @@ import * as t from "@babel/types";
 import { NodeTransformer, TransformContext } from "./transformers";
 
 export const LogicalSimplificationTransformer: NodeTransformer<
-  t.UnaryExpression | t.BinaryExpression
+  t.UnaryExpression
 > = {
   key: "logical-simplification",
   displayName: "Simplify Boolean Expressions",
-  nodeTypes: ["UnaryExpression", "BinaryExpression"],
+  nodeTypes: ["UnaryExpression"],
   phases: ["main"],
 
-  test(node): node is t.UnaryExpression | t.BinaryExpression {
+  test(node): node is t.UnaryExpression {
     return (
-      (t.isUnaryExpression(node) && node.operator === "!") ||
-      (t.isBinaryExpression(node) &&
-        (node.operator === "===" || node.operator === "!=="))
+      t.isUnaryExpression(node) &&
+      node.operator === "!" &&
+      t.isBooleanLiteral(node.argument)
     );
   },
 
   transform(node, _context: TransformContext): t.Expression {
-    // Simplify: !!x → x
-    if (
-      t.isUnaryExpression(node) &&
-      node.operator === "!" &&
-      t.isUnaryExpression(node.argument) &&
-      node.argument.operator === "!"
-    ) {
-      return node.argument.argument;
-    }
-
-    // Simplify: !true → false, !false → true
-    if (
-      t.isUnaryExpression(node) &&
-      node.operator === "!" &&
-      t.isBooleanLiteral(node.argument)
-    ) {
-      return t.booleanLiteral(!node.argument.value);
-    }
-
-    // Simplify: x === true → x
-    if (
-      t.isBinaryExpression(node) &&
-      node.operator === "===" &&
-      t.isBooleanLiteral(node.right) &&
-      t.isExpression(node.left)
-    ) {
-      return node.right.value
-        ? node.left
-        : t.unaryExpression("!", node.left, true);
-    }
-
-    // Simplify: x === false → !x
-    if (
-      t.isBinaryExpression(node) &&
-      node.operator === "===" &&
-      t.isBooleanLiteral(node.left)
-    ) {
-      return node.left.value
-        ? node.right
-        : t.unaryExpression("!", node.right, true);
-    }
-
-    // Simplify: x !== true → !x
-    if (
-      t.isBinaryExpression(node) &&
-      node.operator === "!==" &&
-      t.isBooleanLiteral(node.right) &&
-      t.isExpression(node.left)
-    ) {
-      return node.right.value
-        ? t.unaryExpression("!", node.left, true)
-        : node.left;
-    }
-
-    // Simplify: false !== x → x
-    if (
-      t.isBinaryExpression(node) &&
-      node.operator === "!==" &&
-      t.isBooleanLiteral(node.left)
-    ) {
-      return node.left.value
-        ? t.unaryExpression("!", node.right, true)
-        : node.right;
-    }
-
-    return node;
+    // Only fold ! on boolean literals. `!!x → x` and `x === true → x` change
+    // the runtime type (e.g. number → still number) and break Zod boolean
+    // schemas such as `earlyEntry: z.boolean()` after `!!taskId`.
+    return t.booleanLiteral(!node.argument.value);
   },
 };

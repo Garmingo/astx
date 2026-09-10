@@ -3,15 +3,6 @@ import { LogicalSimplificationTransformer } from "../../transformers/LogicalSimp
 import { applyTransformer, strip } from "../helpers.js";
 
 describe("LogicalSimplification", () => {
-  // Double negation
-  it("simplifies !!x to x", () => {
-    const out = strip(
-      applyTransformer("!!x;", LogicalSimplificationTransformer),
-    );
-    expect(out).toBe("x;");
-  });
-
-  // Boolean literal negation
   it("simplifies !true to false", () => {
     const out = strip(
       applyTransformer("!true;", LogicalSimplificationTransformer),
@@ -26,67 +17,13 @@ describe("LogicalSimplification", () => {
     expect(out).toBe("true;");
   });
 
-  // x === true / x === false
-  it("simplifies x === true to x", () => {
+  it("does NOT strip !!x — ToBoolean must stay a boolean", () => {
     const out = strip(
-      applyTransformer("x === true;", LogicalSimplificationTransformer),
+      applyTransformer("!!x;", LogicalSimplificationTransformer),
     );
-    expect(out).toBe("x;");
+    expect(out).toBe("!!x;");
   });
 
-  it("simplifies x === false to !x", () => {
-    const out = strip(
-      applyTransformer("x === false;", LogicalSimplificationTransformer),
-    );
-    expect(out).toBe("!x;");
-  });
-
-  // true === x / false === x
-  it("simplifies true === x to x", () => {
-    const out = strip(
-      applyTransformer("true === x;", LogicalSimplificationTransformer),
-    );
-    expect(out).toBe("x;");
-  });
-
-  it("simplifies false === x to !x", () => {
-    const out = strip(
-      applyTransformer("false === x;", LogicalSimplificationTransformer),
-    );
-    expect(out).toBe("!x;");
-  });
-
-  // x !== true / x !== false
-  it("simplifies x !== true to !x", () => {
-    const out = strip(
-      applyTransformer("x !== true;", LogicalSimplificationTransformer),
-    );
-    expect(out).toBe("!x;");
-  });
-
-  it("simplifies x !== false to x", () => {
-    const out = strip(
-      applyTransformer("x !== false;", LogicalSimplificationTransformer),
-    );
-    expect(out).toBe("x;");
-  });
-
-  // true !== x / false !== x
-  it("simplifies true !== x to !x", () => {
-    const out = strip(
-      applyTransformer("true !== x;", LogicalSimplificationTransformer),
-    );
-    expect(out).toBe("!x;");
-  });
-
-  it("simplifies false !== x to x", () => {
-    const out = strip(
-      applyTransformer("false !== x;", LogicalSimplificationTransformer),
-    );
-    expect(out).toBe("x;");
-  });
-
-  // Non-triggering cases
   it("does NOT simplify a single negation !x", () => {
     const out = strip(
       applyTransformer("!x;", LogicalSimplificationTransformer),
@@ -94,7 +31,28 @@ describe("LogicalSimplification", () => {
     expect(out).toBe("!x;");
   });
 
-  it("does NOT simplify == (loose equality)", () => {
+  it("does NOT rewrite x === true (not equivalent for non-booleans)", () => {
+    const out = strip(
+      applyTransformer("x === true;", LogicalSimplificationTransformer),
+    );
+    expect(out).toBe("x === true;");
+  });
+
+  it("does NOT rewrite x === false", () => {
+    const out = strip(
+      applyTransformer("x === false;", LogicalSimplificationTransformer),
+    );
+    expect(out).toBe("x === false;");
+  });
+
+  it("does NOT rewrite x !== true", () => {
+    const out = strip(
+      applyTransformer("x !== true;", LogicalSimplificationTransformer),
+    );
+    expect(out).toBe("x !== true;");
+  });
+
+  it("does NOT rewrite == (loose equality)", () => {
     const out = strip(
       applyTransformer("x == true;", LogicalSimplificationTransformer),
     );
