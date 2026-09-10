@@ -197,7 +197,6 @@ export const MINIMAL_AST_KEYS: Record<string, string[]> = {
   CatchClause: ["param", "body"],
   Super: [],
   ExportSpecifier: ["local", "exported"],
-  StaticBlock: ["body"],
 
   // ES Module imports
   ImportDeclaration: ["specifiers", "source"],
@@ -230,6 +229,10 @@ export const MINIMAL_AST_KEYS: Record<string, string[]> = {
     "async",
   ],
   PrivateName: ["id"],
+
+  // ES2022 class static initialization blocks — append-only: new types must
+  // stay at the end so existing v0x02 bytecode type indices remain stable.
+  StaticBlock: ["body"],
 };
 
 /**

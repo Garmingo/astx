@@ -166,6 +166,29 @@ describe("Compile → toBuffer → loadFromBuffer roundtrip", () => {
     const code = `export * from "./utils";`;
     expect(() => compile(code, "all")).not.toThrow();
   });
+
+  it("executes class static initialization blocks", async () => {
+    const code = `
+      class Foo {
+        static x;
+        static { Foo.x = 42; }
+      }
+      console.log(Foo.x);
+    `;
+    const program = await roundtrip(code);
+    const logs = runCaptured(program);
+    expect(logs).toContain("42");
+  });
+
+  it("generates static { } syntax from static blocks", async () => {
+    const program = await roundtrip(`
+      class Foo {
+        static { console.log("init"); }
+      }
+    `);
+    const code = generateJSCode(program);
+    expect(code).toMatch(/static\s*\{/);
+  });
 });
 
 describe("generateJSCode()", () => {
