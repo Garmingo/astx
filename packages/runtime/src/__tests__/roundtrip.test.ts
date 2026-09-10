@@ -272,6 +272,49 @@ describe("shorthand ObjectProperty renaming regression", () => {
   });
 });
 
+describe("host-global identifier renaming", () => {
+  // Indirect eval runs resource code in the global scope. Generated names
+  // like `on` would overwrite FiveM's event API; Zod's guid() factory then
+  // becomes `function on(i) { return new i(...) }`, and
+  // `on("onResourceStop", cb)` throws "i is not a constructor".
+
+  it("never emits `function on(` as a generated binding", async () => {
+    const decls = Array.from(
+      { length: 900 },
+      (_, i) => `const v${i} = ${i};`,
+    ).join("\n");
+    const program = compile(`${decls}\nconsole.log(v0);`);
+    const buf = await toBuffer(program);
+    const loaded = await loadFromBuffer(buf);
+    const js = generateJSCode(loaded);
+    expect(js).not.toMatch(/\bfunction on\s*\(/);
+    expect(js).not.toMatch(/\b(?:var|let|const) on\b/);
+  });
+
+  it("does not overwrite a pre-existing global `on` in eval mode", async () => {
+    const sentinel = (..._args: unknown[]) => "sentinel-on";
+    const previous = (globalThis as Record<string, unknown>).on;
+    (globalThis as Record<string, unknown>).on = sentinel;
+    try {
+      const decls = Array.from(
+        { length: 900 },
+        (_, i) => `const v${i} = ${i};`,
+      ).join("\n");
+      const program = compile(`${decls}\nconsole.log(v0);`);
+      const buf = await toBuffer(program);
+      const loaded = await loadFromBuffer(buf);
+      run(loaded, { mode: "eval", skipDefaultInjects: true });
+      expect((globalThis as Record<string, unknown>).on).toBe(sentinel);
+    } finally {
+      if (previous === undefined) {
+        delete (globalThis as Record<string, unknown>).on;
+      } else {
+        (globalThis as Record<string, unknown>).on = previous;
+      }
+    }
+  });
+});
+
 describe("createSourceMapConsumer()", () => {
   it("returns null when no source map is present", () => {
     const program = compile(`const x = 1;`, "all");

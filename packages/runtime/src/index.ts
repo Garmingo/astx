@@ -140,6 +140,48 @@ const RESERVED_WORDS = new Set([
   "yield",
 ]);
 
+/**
+ * Host globals that generated identifiers must never shadow.
+ *
+ * ASTX resource code is executed with indirect eval in the global scope so
+ * that free names like `on` / `emit` resolve from the host (FiveM). If
+ * generateShortName() emits those names, function declarations overwrite the
+ * host bindings — e.g. Zod's `guid()` factory becoming `function on(i) {
+ * return new i(...) }` makes `on("onResourceStop", cb)` throw
+ * "i is not a constructor".
+ */
+const HOST_GLOBALS = new Set([
+  "on",
+  "onNet",
+  "emit",
+  "emitNet",
+  "exports",
+  "source",
+  "global",
+  "globalThis",
+  "window",
+  "self",
+  "console",
+  "undefined",
+  "arguments",
+  "eval",
+  "NaN",
+  "Infinity",
+]);
+
+function isForbiddenName(name: string): boolean {
+  if (RESERVED_WORDS.has(name) || HOST_GLOBALS.has(name)) return true;
+  // Skip names that already resolve on the global object (FiveM natives, etc.).
+  try {
+    if (typeof globalThis === "undefined") return false;
+    return (
+      typeof (globalThis as Record<string, unknown>)[name] !== "undefined"
+    );
+  } catch {
+    return false;
+  }
+}
+
 function generateShortName(index: number): string {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   let name = "";
@@ -148,8 +190,7 @@ function generateShortName(index: number): string {
     index = Math.floor(index / chars.length) - 1;
   } while (index >= 0);
 
-  // If the name is a reserved word, add an underscore
-  if (RESERVED_WORDS.has(name)) {
+  while (isForbiddenName(name)) {
     name = "_" + name;
   }
 
